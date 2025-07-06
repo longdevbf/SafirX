@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http } from 'viem'
-import { oasisTestnet } from 'viem/chains' // hoặc mainnet
+
 import { ERC721_ABI } from '@/abis/MarketABI'
-import { mainnet, sapphireTestnet } from 'wagmi/chains';
+import { sapphireTestnet } from 'wagmi/chains';
 const publicClient = createPublicClient({
-  chain: sapphireTestnet, // hoặc oasisMainnet
+  chain: sapphireTestnet, 
   transport: http()
 })
 

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { X, Package, AlertCircle, Loader2, Gavel, CheckCircle } from "lucide-react"
+import {  AlertCircle, Loader2, Gavel, CheckCircle } from "lucide-react"
 import { ProcessedNFT } from "@/interfaces/nft"
 import { useCollectionAuctionApproval } from "@/hooks/use-collection-auction-approval"
 import { useWallet } from "@/context/walletContext"
@@ -58,7 +58,7 @@ export default function AuctionCollectionSelector({ nfts, onClose, onCreateAucti
     isConfirmed: isApprovalConfirmed,
     error: approvalError
   } = useCollectionAuctionApproval(selectedContract, address)
-
+  console.log('Approval Error:', approvalError)
   // Group NFTs by contract address
   const nftsByContract = nfts.reduce((acc, nft) => {
     if (!acc[nft.contractAddress]) {
@@ -294,15 +294,28 @@ export default function AuctionCollectionSelector({ nfts, onClose, onCreateAucti
               />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="allowPublicReveal"
-                checked={allowPublicReveal}
-                onCheckedChange={(checked) => setAllowPublicReveal(checked === true)}
-              />
-              <Label htmlFor="allowPublicReveal">
-                Allow public bid history after auction ends
-              </Label>
+            {/* Public Reveal Option - Made more prominent */}
+            <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="allowPublicReveal"
+                  checked={allowPublicReveal}
+                  onCheckedChange={(checked) => setAllowPublicReveal(checked === true)}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="allowPublicReveal" className="font-medium text-blue-900">
+                    Allow Public Bid History
+                  </Label>
+                  <p className="text-sm text-blue-700 mt-1">
+                    After the auction ends, you can choose to make all bid amounts and bidders public for transparency. 
+                    This setting enables the option - you can still decide later whether to reveal the bids.
+                  </p>
+                  <p className="text-xs text-blue-600 mt-2">
+                    ✨ Recommended: This builds trust and transparency with bidders
+                  </p>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -11,14 +11,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { 
   Search, Filter, Grid3X3, List, Heart, Eye, Star, Edit, AlertCircle, 
   RefreshCw, Loader2, ShoppingCart, Tag, X, Package, ArrowLeft, Users
 } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
+//import Link from "next/link"
 import { useWallet } from "@/context/walletContext"
 import { useMarketplaceNFTs, useNFTMarket, useCollectionDetail } from "@/hooks/use-market"
 import { ProcessedNFT } from "@/interfaces/nft"
@@ -47,7 +47,7 @@ export default function MarketplacePage() {
   const { 
     nfts, loading, error, total, refetch, collections, rarities
   } = useMarketplaceNFTs()
-  
+  console.log(total, collections, rarities);
   const {
     buyNFTUnified, updatePrice, updateBundlePrice, 
     cancelListingUnified, hash, error: marketError, 
@@ -78,6 +78,7 @@ export default function MarketplacePage() {
         description: "NFT marketplace data has been reloaded",
       })
     } catch (error) {
+      console.log(error);
       toast({
         title: "Refresh failed",
         description: "Failed to reload marketplace data",
@@ -278,11 +279,11 @@ export default function MarketplacePage() {
         title: "Purchase Submitted",
         description: "Please confirm the transaction in your wallet...",
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error("Purchase error:", error)
       toast({
         title: "Purchase Failed",
-        description: error?.message || "Failed to purchase NFT. Please try again.",
+        description: error as string || "Failed to purchase NFT. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
@@ -310,10 +311,10 @@ export default function MarketplacePage() {
         title: "Price Update Submitted",
         description: "Please confirm the transaction in your wallet...",
       })
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Price Update Failed",
-        description: error?.message || "Failed to update price. Please try again.",
+        description: error as string || "Failed to update price. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
@@ -334,10 +335,10 @@ export default function MarketplacePage() {
         title: "Cancellation Submitted",
         description: "Please confirm the transaction in your wallet...",
       })
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Cancellation Failed",
-        description: error?.message || "Failed to cancel listing. Please try again.",
+        description: error as string || "Failed to cancel listing. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)

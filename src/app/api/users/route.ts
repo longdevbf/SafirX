@@ -5,7 +5,7 @@ import { Readable } from 'stream'
 import { userQueries } from '@/lib/db' // Uncomment this
 
 // Google Drive setup with better error handling
-let drive: any = null
+let drive: ReturnType<typeof google.drive> | null = null // Fix: Replace 'any' with proper type
 let driveConfigured = false
 
 try {
@@ -38,7 +38,9 @@ function bufferToStream(buffer: Buffer): Readable {
   return readable
 }
 
+// Remove the unused function or add this comment if you plan to use it later
 // Test Google Drive connection and folder access
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function testGoogleDriveAccess(): Promise<boolean> {
   if (!driveConfigured || !drive) return false
   
@@ -59,6 +61,10 @@ async function testGoogleDriveAccess(): Promise<boolean> {
 
 // Upload to Google Drive with better error handling
 async function uploadToGoogleDrive(file: File, fileName: string, isProfile: boolean = false): Promise<string> {
+  if (!drive) {
+    throw new Error('Google Drive not configured')
+  }
+
   try {
     console.log(`Uploading file to Google Drive: ${fileName}`)
     
@@ -107,6 +113,7 @@ async function uploadToGoogleDrive(file: File, fileName: string, isProfile: bool
   }
 }
 
+// ...rest of the code remains the same...
 // GET - Get user by wallet address
 export async function GET(request: NextRequest) {
   try {

@@ -1,5 +1,5 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { ERC721_ABI } from '@/abis/MarketABI'
 import { SEALED_BID_AUCTION_CONFIG } from '@/abis/AuctionSealedBid'
 

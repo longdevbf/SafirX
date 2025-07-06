@@ -4,7 +4,7 @@ export interface RetryOptions {
   maxRetries: number
   delayMs: number
   backoffMultiplier?: number
-  onRetry?: (attemptNumber: number, error: any) => void
+  onRetry?: (attemptNumber: number, error: unknown) => void
 }
 
 export async function retryWithBackoff<T>(
@@ -13,7 +13,7 @@ export async function retryWithBackoff<T>(
 ): Promise<T> {
   const { maxRetries, delayMs, backoffMultiplier = 1.5, onRetry } = options
   
-  let lastError: any
+  let lastError: unknown
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -51,12 +51,12 @@ export async function withTimeout<T>(
   return Promise.race([promise, timeoutPromise])
 }
 
-export function isNetworkError(error: any): boolean {
+export function isNetworkError(error: unknown): boolean {
   if (!error) return false
-  
-  const errorMessage = error.message?.toLowerCase() || ''
-  const errorName = error.name?.toLowerCase() || ''
-  
+
+  const errorMessage = (error as Error).message?.toLowerCase() || ''
+  const errorName = (error as Error).name?.toLowerCase() || ''
+
   return (
     errorMessage.includes('failed to fetch') ||
     errorMessage.includes('network') ||
@@ -67,10 +67,10 @@ export function isNetworkError(error: any): boolean {
   )
 }
 
-export function createNetworkErrorMessage(error: any): string {
+export function createNetworkErrorMessage(error: unknown): string {
   if (isNetworkError(error)) {
     return 'Failed to connect to auction contract. Please check your network connection.'
   }
   
-  return error.message || 'An unexpected error occurred'
+  return error as string || 'An unexpected error occurred'
 }

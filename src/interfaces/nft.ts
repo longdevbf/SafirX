@@ -14,7 +14,7 @@ export interface RawNFT {
   token?: {
     contract_address?: string;
     collection_name?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 export interface ProcessedNFT {
@@ -46,7 +46,7 @@ export interface ProcessedNFT {
   verified?: boolean
   
   // Additional data
-  metadata?: any
+  metadata?: unknown
   owner?: string
 }
 export interface NFTApiResponse {

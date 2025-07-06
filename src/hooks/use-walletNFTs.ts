@@ -139,9 +139,7 @@ export function useWalletNFTs() {
       rarity,
       metadata: nft.metadata,
       // Additional data that might be useful
-      token: nft.token,
-      owner: nft.owner_eth,
-      numTransfers: nft.num_transfers
+      owner: nft.owner_eth
     };
   }, []);
 

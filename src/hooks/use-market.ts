@@ -2,7 +2,7 @@ import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 
 import { parseEther, formatEther } from 'viem'
 import { NFT_MARKET_CONFIG, ERC721_ABI, ContractListing, ContractCollectionListing, ListingInfo } from '@/abis/MarketABI'
 import { ProcessedNFT } from '@/interfaces/nft'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { readContract } from 'wagmi/actions'
 import { config } from '@/components/config/wagmiConfig'
 
@@ -952,6 +952,7 @@ const getListingDataSafe = async (id: bigint) => {
       tokenIds: listingInfoResult[7]
     }
   } catch (error) {
+    console.log(error)
     try {
       // ✅ Fallback: try getListing for single NFTs
       const listingResult = await readContract(config, {
@@ -980,6 +981,7 @@ const getListingDataSafe = async (id: bigint) => {
         tokenIds: [listingResult.tokenId]
       }
     } catch (fallbackError) {
+      console.log(fallbackError);
       console.error('Both getListingInfo and getListing failed for ID:', id.toString())
       return null
     }

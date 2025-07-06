@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -31,7 +31,7 @@ import {
   Heart,
   Tag,
   Activity,
-  Wallet,
+
   Star,
   AlertCircle,
   RefreshCw,
@@ -47,10 +47,10 @@ import Link from "next/link"
 import { useWallet } from "@/context/walletContext"
 import { useWalletNFTs } from "@/hooks/use-walletNFTs"
 import { ProcessedNFT } from "@/interfaces/nft"
-import { UserProfile } from "@/interfaces/user"
+//import { UserProfile } from "@/interfaces/user"
 import UserSettings from "@/components/UserSettings"
 import { useUserProfile } from '@/hooks/useUserProfile'
-import { useNFTMarket, useNFTApproval } from "@/hooks/use-market"
+import { useNFTMarket } from "@/hooks/use-market"
 import { useSealedBidAuction } from "@/hooks/use-auction"
 import { useAuctionApproval } from "@/hooks/use-auction-approval"
 import CollectionSelector, { CollectionSellData } from "@/components/collectionSelection"
@@ -60,13 +60,19 @@ import { toast } from "@/hooks/use-toast"
 import { readContract } from "wagmi/actions"
 import { ERC721_ABI } from "@/abis/MarketABI"
 import { config } from "@/components/config/wagmiConfig"
-import { Checkbox } from "@radix-ui/react-checkbox"
-
+import { Checkbox } from "@/components/ui/checkbox"
+interface UserProfile {
+  name: string
+  description: string
+  w_address: string
+  m_img?: string | undefined
+  b_img?: string | undefined
+}
 export default function ProfilePage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedTab, setSelectedTab] = useState("owned")
   const [showSettings, setShowSettings] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<UserProfile | null>(null)
   const [userLoading, setUserLoading] = useState(false)
   const [selectedNFT, setSelectedNFT] = useState<ProcessedNFT | null>(null)
   const [sellPrice, setSellPrice] = useState("")
@@ -85,7 +91,7 @@ export default function ProfilePage() {
   const [showAuctionDialog, setShowAuctionDialog] = useState(false)
   const [selectedAuctionNFT, setSelectedAuctionNFT] = useState<ProcessedNFT | null>(null)
   const [showAuctionCollectionSelector, setShowAuctionCollectionSelector] = useState(false)
-  const [auctionApprovalStatus, setAuctionApprovalStatus] = useState<{ [key: string]: boolean }>({})
+  //const [auctionApprovalStatus, setAuctionApprovalStatus] = useState<{ [key: string]: boolean }>({})
   const [auctionData, setAuctionData] = useState({
     startingPrice: "",
     reservePrice: "",
@@ -128,7 +134,7 @@ export default function ProfilePage() {
     isConfirming: isAuctionConfirming,
     isConfirmed: isAuctionConfirmed,
   } = useSealedBidAuction()
-
+  console.log(auctionError)
   // ✅ NEW: Auction approval hook
   const {
     isApproved: isAuctionApproved,
@@ -337,11 +343,12 @@ export default function ProfilePage() {
           name: 'User',
           description: 'Digital art enthusiast and NFT collector',
           w_address: address,
-          m_img: '',
-          b_img: ''
+          m_img: undefined,
+          b_img: undefined
         })
       }
     } catch (error) {
+      console.log(error)
       setUser({
         name: 'User',
         description: 'Digital art enthusiast and NFT collector',
@@ -354,7 +361,7 @@ export default function ProfilePage() {
     }
   }
 
-  const handleSaveSettings = async (updatedUser: any) => {
+  const handleSaveSettings = async (updatedUser: UserProfile) => {
     setUser(updatedUser)
     setShowSettings(false)
 
@@ -387,6 +394,7 @@ export default function ProfilePage() {
         return result.isApproved
       }
     } catch (error) {
+      console.log(error)
       // Fallback to false if check fails
     }
     return false
@@ -430,8 +438,8 @@ export default function ProfilePage() {
           setCurrentTransactionType('approval')
           return
 
-        } catch (approvalError: any) {
-          const errorMessage = approvalError?.message || approvalError?.toString() || ''
+        } catch (approvalError) {
+          const errorMessage = approvalError as string || approvalError?.toString() || ''
 
           if (errorMessage.toLowerCase().includes('user rejected') ||
             errorMessage.toLowerCase().includes('user denied')) {
@@ -454,7 +462,7 @@ export default function ProfilePage() {
         }
       }
 
-      // ✅ STEP 3: Collection is approved, proceed with listing
+    
       toast({
         title: "🚀 Submitting Collection Listing",
         description: "Please confirm the listing transaction in your wallet...",
@@ -507,8 +515,8 @@ export default function ProfilePage() {
         description: "Waiting for blockchain confirmation...",
       })
 
-    } catch (error: any) {
-      const errorMessage = error?.message || error?.toString() || ''
+    } catch (error) {
+      const errorMessage = error as string || error?.toString() || ''
 
       if (errorMessage.toLowerCase().includes('user rejected') ||
         errorMessage.toLowerCase().includes('user denied')) {
@@ -588,7 +596,7 @@ export default function ProfilePage() {
             console.log('📋 API approval check result:', isApproved)
           }
         } catch (apiError) {
-          console.log('⚠️ API check failed, trying direct contract call')
+          console.log('⚠️ API check failed, trying direct contract call', apiError)
           try {
             const approvalStatus = await readContract(config, {
               address: selectedNFT.contractAddress as `0x${string}`,
@@ -638,8 +646,8 @@ export default function ProfilePage() {
           setCurrentTransactionType('approval')
           return
 
-        } catch (approvalError: any) {
-          const errorMessage = approvalError?.message || approvalError?.toString() || ''
+        } catch (approvalError) {
+          const errorMessage = approvalError as string || approvalError?.toString() || ''
           console.error('❌ Approval failed:', errorMessage)
 
           if (errorMessage.toLowerCase().includes('user rejected') ||
@@ -683,8 +691,8 @@ export default function ProfilePage() {
         description: "Waiting for blockchain confirmation...",
       })
 
-    } catch (error: any) {
-      const errorMessage = error?.message || error?.toString() || ''
+    } catch (error) {
+      const errorMessage = error as string || error?.toString() || ''
 
       if (errorMessage.toLowerCase().includes('user rejected') ||
         errorMessage.toLowerCase().includes('user denied')) {
@@ -829,11 +837,11 @@ export default function ProfilePage() {
         title: "🎉 Collection Auction Created!",
         description: "Your collection auction has been successfully created.",
       })
-      
-    } catch (error: any) {
+
+    } catch (error) {
       console.error('Collection auction creation failed:', error)
-      const errorMessage = error?.message || error?.reason || error?.toString() || "Failed to create collection auction"
-      
+      const errorMessage = error as string || error?.toString() || "Failed to create collection auction"
+
       toast({
         title: "❌ Auction Creation Failed",
         description: errorMessage,
@@ -879,7 +887,7 @@ export default function ProfilePage() {
           <div className="absolute inset-0 bg-black/20" />
         </div>
         <div className="container mx-auto px-4">
-          <div className="relative -mt-16 mb-8">
+          <div className="relative -mt-8 mb-8">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
               <div className="w-32 h-32 bg-muted rounded-full animate-pulse" />
               <div className="flex-1 space-y-2">
@@ -1007,7 +1015,7 @@ export default function ProfilePage() {
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>List NFT for Sale</DialogTitle>
             <DialogDescription>
-              Set your price and listing type for "{nft.name}".
+              Set your price and listing type for {nft.name}.
             </DialogDescription>
           </DialogHeader>
 
@@ -1217,7 +1225,7 @@ export default function ProfilePage() {
 
       <div className="container mx-auto px-4">
         {/* Profile Header */}
-        <div className="relative -mt-16 mb-8">
+        <div className="relative -mt-0 mb-8">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             <Avatar className="w-32 h-32 border-4 border-background shadow-lg">
               <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
@@ -1376,7 +1384,7 @@ export default function ProfilePage() {
                 </div>
                 <h3 className="text-xl font-semibold mb-2">No NFTs Found</h3>
                 <p className="text-muted-foreground mb-4">
-                  You don't have any NFTs in your wallet yet.
+                  You don&apos;t have any NFTs in your wallet yet.
                 </p>
                 <Button asChild>
                   <Link href="/explore">Explore Marketplace</Link>
@@ -1455,7 +1463,7 @@ export default function ProfilePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Created NFTs</h3>
               <p className="text-muted-foreground">
-                NFTs you've created will appear here.
+                NFTs you&apos;ve created will appear here.
               </p>
             </div>
           </TabsContent>
@@ -1691,13 +1699,31 @@ export default function ProfilePage() {
                   placeholder="Describe your auction..."
                 />
               </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  checked={auctionData.allowPublicReveal}
-                  onCheckedChange={v => setAuctionData(d => ({ ...d, allowPublicReveal: !!v }))}
-                />
-                <Label>Allow public bid history after auction ends</Label>
+              
+              {/* Public Reveal Option - Made more prominent */}
+              <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="allowPublicReveal"
+                    checked={auctionData.allowPublicReveal}
+                    onCheckedChange={v => setAuctionData(d => ({ ...d, allowPublicReveal: !!v }))}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="allowPublicReveal" className="font-medium text-blue-900">
+                      Allow Public Bid History
+                    </Label>
+                    <p className="text-sm text-blue-700 mt-1">
+                      After the auction ends, you can choose to make all bid amounts and bidders public for transparency. 
+                      This setting enables the option - you can still decide later whether to reveal the bids.
+                    </p>
+                    <p className="text-xs text-blue-600 mt-2">
+                      ✨ Recommended: This builds trust and transparency with bidders
+                    </p>
+                  </div>
+                </div>
               </div>
+              
               {/* Status & Actions */}
               <div className="flex flex-col gap-2 mt-4">
                 {!isAuctionApproved ? (

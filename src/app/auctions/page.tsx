@@ -29,20 +29,20 @@ import {
   CheckCircle, 
   Timer,
   Gavel,
-  Trophy,
-  DollarSign,
-  ArrowUp,
+
   Loader2,
   ExternalLink,
-  Copy,
+  
   RefreshCw,
-  Edit,
-  History,
+
+ 
   Crown,
-  TrendingUp,
+
   Wallet,
   X,
-  AlertCircle
+  AlertCircle,
+  Shield,
+  Zap
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -51,11 +51,10 @@ import { useWallet } from "@/context/walletContext"
 import { 
   useAllAuctions, 
   useSealedBidAuction, 
-  useAuctionDetail,
   ProcessedAuction
 } from "@/hooks/use-auction"
 import { toast } from "@/hooks/use-toast"
-import { AuctionState } from "@/abis/AuctionSealedBid"
+//import { AuctionState } from "@/abis/AuctionSealedBid"
 import { BidHistoryDialog } from "@/components/BidHistoryDialog"
 
 export default function AuctionsPage() {
@@ -83,7 +82,7 @@ export default function AuctionsPage() {
     isConfirmed,
     error: transactionError
   } = useSealedBidAuction()
-
+  console.log(isUpdatingBid);
   // ✅ Group auctions by state with enhanced debug logging
   const groupedAuctions = useMemo(() => {
     const now = Math.floor(Date.now() / 1000)
@@ -333,16 +332,6 @@ export default function AuctionsPage() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
-  // ✅ Copy to clipboard
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    toast({
-      title: "Copied!",
-      description: `${label} copied to clipboard`,
-    })
-  }
-
-  // ✅ Check if user is seller
   const isUserSeller = (auction: ProcessedAuction) => {
     return address && auction.seller.toLowerCase() === address.toLowerCase()
   }
@@ -624,7 +613,7 @@ export default function AuctionsPage() {
             {/* Auction stats */}
             <div className="bg-muted rounded-lg p-3">
               <h4 className="font-medium mb-2">Auction Stats</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-3 gap-3 text-sm">
                 <div>
                   <span className="text-muted-foreground">Total Bids:</span>
                   <div className="font-semibold">{auction.totalBids.toString()}</div>
@@ -632,10 +621,6 @@ export default function AuctionsPage() {
                 <div>
                   <span className="text-muted-foreground">Bidders:</span>
                   <div className="font-semibold">{auction.uniqueBidders.toString()}</div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Reserve Price:</span>
-                  <div className="font-semibold">{formatEther(auction.reservePrice)} ROSE</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Time Left:</span>
@@ -720,14 +705,10 @@ export default function AuctionsPage() {
           <div className="space-y-4">
             {/* Collection Info */}
             <div className="bg-muted rounded-lg p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Starting Price:</span>
                   <div className="font-semibold">{formatEther(auction.startingPrice)} ROSE</div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Reserve Price:</span>
-                  <div className="font-semibold">{formatEther(auction.reservePrice)} ROSE</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">NFT Count:</span>
@@ -742,7 +723,7 @@ export default function AuctionsPage() {
 
             {/* NFT Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {auction.tokenIdsList.map((tokenId, index) => (
+              {auction.tokenIdsList.map((tokenId) => (
                 <div key={tokenId.toString()} className="border rounded-lg overflow-hidden">
                   <div className="aspect-square relative">
                     <Image
@@ -1236,123 +1217,68 @@ export default function AuctionsPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Debug Section - Remove in production */}
-        {process.env.NODE_ENV === 'development' && (
-          <Card className="mb-8 bg-yellow-50 border-yellow-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-yellow-800">
-                <AlertCircle className="w-5 h-5" />
-                Debug Info
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <strong>Total Auctions:</strong> {auctions.length}
-                </div>
-                <div>
-                  <strong>Active:</strong> {groupedAuctions.active.length}
-                </div>
-                <div>
-                  <strong>Ended:</strong> {groupedAuctions.ended.length}
-                </div>
-                <div>
-                  <strong>Finalized:</strong> {groupedAuctions.finalized.length}
-                </div>
-                <div>
-                  <strong>Current Time:</strong> {Math.floor(Date.now() / 1000)}
-                </div>
-                <div>
-                  <strong>Status:</strong> {loading ? "Loading..." : error ? "Error" : "Loaded"}
-                </div>
-              </div>
-              <div className="space-x-2">
-                <Button 
-                  onClick={() => {
-                    console.log('=== CURRENT AUCTIONS DEBUG ===')
-                    console.log('All auctions:', auctions)
-                    console.log('Grouped:', groupedAuctions)
-                  }} 
-                  variant="outline" 
-                  size="sm"
-                >
-                  Debug Auctions
-                </Button>
-                <Button 
-                  onClick={() => refetch()} 
-                  variant="outline" 
-                  size="sm"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh Data
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}          {/* Debug Panel - Remove in production */}
-          {process.env.NODE_ENV === 'development' && (
-            <Alert className="mb-6 bg-gray-50 border-gray-200">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-semibold">🔍 Debug Info - Auction Grouping</div>
-                  <Button onClick={() => refetch()} size="sm" variant="outline">
-                    <RefreshCw className="w-3 h-3 mr-1" />
-                    Refresh Data
-                  </Button>
-                </div>
-                <div className="space-y-1 text-sm font-mono">
-                  <div>Total Auctions Fetched: {auctions.length}</div>
-                  <div>Current Time: {new Date().toLocaleString()}</div>
-                  <div>Loading: {loading ? 'Yes' : 'No'}</div>
-                  {error && <div className="text-red-600">Error: {error}</div>}
-                  {auctions.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {auctions.map((auction, index) => {
-                        const now = Math.floor(Date.now() / 1000)
-                        const endTime = Number(auction.endTime)
-                        const timeRemaining = Math.max(0, endTime - now)
-                        const minutes = Math.floor(timeRemaining / 60)
-                        const group = auction.state === 0 
-                          ? (timeRemaining > 0 ? 'ACTIVE' : 'ENDED')
-                          : auction.state === 1 ? 'FINALIZED' : 'CANCELLED'
-                        
-                        return (
-                          <div key={auction.auctionId.toString()} className="p-2 bg-white rounded border">
-                            <div className="font-semibold">
-                              #{auction.auctionId.toString()}: {auction.title}
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>State: {auction.state} ({group})</div>
-                              <div>Time Left: {minutes > 0 ? `${minutes}m` : 'Expired'}</div>
-                              <div>End Time: {new Date(endTime * 1000).toLocaleString()}</div>
-                              <div>Group: <span className={`font-bold ${
-                                group === 'ACTIVE' ? 'text-green-600' : 
-                                group === 'ENDED' ? 'text-yellow-600' : 'text-red-600'
-                              }`}>{group}</span></div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
+
 
         {/* Create Sealed Auction CTA */}
         <div className="mt-12">
-          <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-            <CardContent className="p-8 text-center">
-              <Lock className="w-12 h-12 mx-auto mb-4 text-purple-600" />
-              <h3 className="text-2xl font-bold mb-2">Create Your Own Sealed Auction</h3>
-              <p className="text-muted-foreground mb-6">
-                Launch a private auction where bidders compete without seeing each other's bids
+          <Card className="relative overflow-hidden border-0 shadow-2xl">
+            {/* Background with gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-900">
+              <div className="absolute inset-0 bg-[url('/assets/bottom_b.jpg')] bg-cover bg-center opacity-30"></div>
+              <div className="absolute inset-0 bg-gradient-to-r to-blue-600/20"></div>
+              {/* Animated grid overlay */}
+              <div className="absolute inset-0 opacity-20">
+                <div className="h-full w-full bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent animate-pulse"></div>
+              </div>
+            </div>
+            
+            <CardContent className="relative z-10 p-8 text-center">
+              <div className="relative">
+                {/* Glowing effect behind icon */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-purple-500/30 rounded-full blur-xl"></div>
+                <Lock className="w-12 h-12 mx-auto mb-4 text-purple-300 relative z-10" />
+              </div>
+              
+              <h3 className="text-3xl font-bold mb-3 text-white bg-gradient-to-r from-purple-300 to-blue-300 bg-clip-text text-transparent">
+                Create Your Own Sealed Auction
+              </h3>
+              
+              <p className="text-gray-200 mb-8 text-lg max-w-2xl mx-auto leading-relaxed">
+                Launch a private auction where bidders compete without seeing each other bids. 
+                Experience the thrill of sealed bidding with complete transparency and fairness.
               </p>
-              <Button size="lg" asChild>
-                <Link href="/profile">Go to Profile to Create</Link>
-              </Button>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <Button size="lg" asChild className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+                  <Link href="/profile" className="flex items-center gap-2">
+                    <Lock className="w-5 h-5" />
+                    Create Sealed Auction
+                  </Link>
+                </Button>
+                
+                <Button variant="outline" size="lg" asChild className="bg-white/10 border-white/20 text-white hover:bg-white/20 backdrop-blur-sm">
+                  <Link href="/marketplace" className="flex items-center gap-2">
+                    <Eye className="w-5 h-5" />
+                    Browse Marketplace
+                  </Link>
+                </Button>
+              </div>
+              
+              {/* Feature highlights */}
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                <div className="flex items-center justify-center gap-2 text-gray-300">
+                  <Lock className="w-4 h-4 text-purple-400" />
+                  <span>Private Bidding</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-gray-300">
+                  <Shield className="w-4 h-4 text-blue-400" />
+                  <span>Secure & Fair</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-gray-300">
+                  <Zap className="w-4 h-4 text-cyan-400" />
+                  <span>Auto-Finalization</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

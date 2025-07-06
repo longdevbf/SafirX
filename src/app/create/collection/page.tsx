@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
+//import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+//import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
 import { 
@@ -522,7 +522,7 @@ export default function MintCollectionPage() {
                         </div>
                         {nftItems.length > 0 && (
                           <p className="text-xs text-muted-foreground">
-                            First: "{nftItems[0]?.name}" • Last: "{nftItems[nftItems.length - 1]?.name}"
+                            First: {nftItems[0]?.name} • Last: {nftItems[nftItems.length - 1]?.name}
                           </p>
                         )}
                       </div>
@@ -565,7 +565,7 @@ export default function MintCollectionPage() {
                       disabled={isUploading}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      NFTs will be named: "{collectionName || 'Collection Name'} #1", "{collectionName || 'Collection Name'} #2", etc.
+                      NFTs will be named: {collectionName || 'Collection Name'} #1, {collectionName || 'Collection Name'} #2, etc.
                     </p>
                   </div>
 

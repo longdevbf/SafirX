@@ -11,10 +11,19 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { Upload, Save, X } from "lucide-react"
 import Image from "next/image"
+// Thêm interface ở đầu file
+interface User {
+  name: string
+  description: string
+  w_address: string
+  m_img?: string
+  b_img?: string
+}
 
+// Thay đổi interface
 interface UserSettingsProps {
-  user: any
-  onSave: (updatedUser: any) => void
+  user: User
+  onSave: (updatedUser: User) => void
   onCancel: () => void
 }
 

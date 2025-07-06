@@ -1,4 +1,4 @@
-const { google } = require('googleapis')
+import {google} from 'googleapis'
 
 async function testDrive() {
   const auth = new google.auth.GoogleAuth({

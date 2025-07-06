@@ -1,11 +1,11 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { useState, useCallback } from 'react'
+import {useCallback } from 'react'
 import { ERC721_ABI } from '@/abis/MarketABI'
 import { SEALED_BID_AUCTION_CONFIG } from '@/abis/AuctionSealedBid'
 
 export function useAuctionApproval(nftContract: string, userAddress?: string) {
   const { writeContract, data: hash, error, isPending } = useWriteContract()
-  
+  console.log(error)
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
   })

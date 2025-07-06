@@ -143,36 +143,7 @@ export default function CreatePage() {
     }))
   }, [unlockableContent, isSensitive, properties])
 
-  const validateForm = (): boolean => {
-    if (!selectedFile) {
-      toast({
-        title: "File required",
-        description: "Please select a file to upload",
-        variant: "destructive"
-      })
-      return false
-    }
-
-    if (!formData.name.trim()) {
-      toast({
-        title: "Name required",
-        description: "Please enter a name for your NFT",
-        variant: "destructive"
-      })
-      return false
-    }
-
-    if (!formData.description.trim()) {
-      toast({
-        title: "Description required",
-        description: "Please enter a description for your NFT",
-        variant: "destructive"
-      })
-      return false
-    }
-
-    return true
-  }
+  
 
   // Fix: Add missing utility functions
   const getStepIcon = () => {
@@ -584,7 +555,7 @@ export default function CreatePage() {
                       disabled={isUploading}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Nexelra will include a link to this URL on this item's detail page
+                      Nexelra will include a link to this URL on this items detail page
                     </p>
                   </div>
 
@@ -600,7 +571,7 @@ export default function CreatePage() {
                       disabled={isUploading}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      The description will be included on the item's detail page
+                      The description will be included on the items detail page
                     </p>
                   </div>
 

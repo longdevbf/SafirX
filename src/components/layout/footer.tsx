@@ -10,14 +10,14 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">N</span>
-              </div>
-              <span className="text-xl font-bold">SafirX</span>
+            <Link href="/" className="flex items-center space-x-3">
+             <img 
+              src="/assets/logo.png" 
+              alt="SafirX Logo" 
+              className="w-29 h-29 object-contain"/>
             </Link>
             <p className="text-muted-foreground text-sm">
-              The world's premier NFT marketplace for discovering, creating, and trading extraordinary digital assets.
+              The world&apos;s premier NFT marketplace for discovering, creating, and trading extraordinary digital assets.
             </p>
             <div className="flex space-x-4">
               <Button  >

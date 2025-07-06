@@ -1,22 +1,28 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount, usePublicClient, useWalletClient, useWaitForTransactionReceipt } from 'wagmi'
-import { parseEther, formatEther, parseUnits, Address } from 'viem'
-import { toast } from './use-toast'
+import { parseEther, formatEther,  Address } from 'viem'
+//import { toast } from './use-toast'
 import { 
   SEALED_BID_AUCTION_CONFIG, 
   AuctionState, 
-  BidVisibility, 
+  
   AuctionType,
   type Auction, 
   type SealedBid, 
   type PublicBidInfo,
-  type AuctionStats 
+ 
 } from '@/abis/AuctionSealedBid'
-import { retryWithBackoff, withTimeout, isNetworkError, createNetworkErrorMessage } from '@/utils/retryUtils'
+import { retryWithBackoff, withTimeout, createNetworkErrorMessage } from '@/utils/retryUtils'
+interface NFTMetadata {
+  name?: string
+  description?: string
+  image?: string
+  attributes?: Array<{ trait_type: string; value: string }>
+}
 
-// ✅ Extended ProcessedAuction interface with collection support
+
 export interface ProcessedAuction extends Auction {
-  [x: string]: any
+  [x: string]: unknown
   // Time calculations
   timeRemaining: number
   isActive: boolean
@@ -37,15 +43,15 @@ export interface ProcessedAuction extends Auction {
   
   // Display helpers
   finalPrice?: string
-  isCollection: boolean          // ✅ NEW
-  nftCount: number              // ✅ NEW
-  tokenIdsList: bigint[]        // ✅ NEW: All token IDs (single or multiple)
+  isCollection: boolean         
+  nftCount: number             
+  tokenIdsList: bigint[]     
 }
 
 // ✅ Hook for sealed bid auction operations
 export function useSealedBidAuction() {
   const { address } = useAccount()
-  const publicClient = usePublicClient()
+  //const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   
   const [hash, setHash] = useState<`0x${string}` | undefined>()
@@ -348,7 +354,7 @@ export function useAuctionDetail(auctionId: string) {
   const fetchNFTMetadata = useCallback(async (
     nftContract: string, 
     tokenIds: bigint[]
-  ): Promise<any> => {
+  ): Promise<NFTMetadata> => {
     try {
       // For collection, we'll get metadata of the first NFT as representative
       const tokenId = tokenIds[0]
@@ -500,6 +506,16 @@ export function useAuctionDetail(auctionId: string) {
     try {
       setLoadingBids(true)
       
+      console.log(`🔍 Fetching public bid history for auction ${auctionId}...`)
+      console.log(`📋 Auction details:`, {
+        auctionId,
+        state: auction?.state,
+        isFinalized: auction?.isFinalized,
+        allowPublicReveal: auction?.allowPublicReveal,
+        totalBids: auction?.totalBids?.toString(),
+        seller: auction?.seller
+      })
+      
       const bids = await publicClient.readContract({
         address: SEALED_BID_AUCTION_CONFIG.address,
         abi: SEALED_BID_AUCTION_CONFIG.abi,
@@ -507,24 +523,36 @@ export function useAuctionDetail(auctionId: string) {
         args: [BigInt(auctionId)]
       }) as PublicBidInfo[]
       
+      console.log(`📊 Smart contract returned ${bids.length} public bids for auction ${auctionId}:`, bids)
+      
+      if (bids.length === 0 && auction?.totalBids && auction.totalBids > 0) {
+        console.log(`⚠️ Expected ${auction.totalBids.toString()} bids but got 0 public bids. This means:`)
+        console.log(`   - Auction is finalized: ${auction.isFinalized}`)
+        console.log(`   - Allow public reveal: ${auction.allowPublicReveal}`)
+        console.log(`   - Seller may need to call enablePublicBidHistory()`)
+      }
+      
       setPublicBids(bids)
     } catch (error) {
-      console.warn('Could not fetch public bid history:', error)
+      console.error(`❌ Error fetching public bid history for auction ${auctionId}:`, error)
       setPublicBids([])
     } finally {
       setLoadingBids(false)
     }
-  }, [publicClient, auctionId])
+  }, [publicClient, auctionId, auction?.state, auction?.isFinalized, auction?.allowPublicReveal, auction?.totalBids, auction?.seller])
 
   useEffect(() => {
     fetchAuction()
   }, [fetchAuction])
 
   useEffect(() => {
-    if (auction?.isFinalized) {
+    // Fetch public bids if:
+    // 1. Auction is finalized (always try to get bids for completed auctions)
+    // 2. Auction has ended (not active) - seller might have enabled public history
+    if (auction && (auction.isFinalized || (!auction.isActive && auction.state !== AuctionState.CANCELLED))) {
       fetchPublicBids()
     }
-  }, [auction?.isFinalized, fetchPublicBids])
+  }, [auction?.isFinalized, auction?.isActive, auction?.state, fetchPublicBids])
 
   return {
     auction,
@@ -556,7 +584,7 @@ export function useAllAuctions() {
       console.log('🔍 Starting to fetch all auctions...')
       
       // Step 1: First try to get active auctions (these we know exist and work)
-      let allAuctionIds = new Set<bigint>()
+      const allAuctionIds = new Set<bigint>()
       let activeAuctionIds: bigint[] = []
       
       try {
@@ -573,7 +601,7 @@ export function useAllAuctions() {
             maxRetries: 3,
             delayMs: 1000,
             onRetry: (attempt, error) => {
-              console.log(`🔄 Retrying to fetch active auctions (attempt ${attempt}/3):`, error.message)
+              console.log(`🔄 Retrying to fetch active auctions (attempt ${attempt}/3):`, error)
             }
           }
         ) as bigint[]
@@ -627,7 +655,8 @@ export function useAllAuctions() {
                   console.log(`🔄 Retrying auction ${auctionId} (attempt ${attempt}/2)`)
                 }
               }
-            ).then((auctionData: any) => {
+            ).then((result) => {
+              const auctionData = result as Auction
               // If auction exists (has a seller), add to list
               if (auctionData.seller !== '0x0000000000000000000000000000000000000000') {
                 allAuctionIds.add(auctionId)
@@ -664,7 +693,7 @@ export function useAllAuctions() {
               abi: SEALED_BID_AUCTION_CONFIG.abi,
               functionName: 'getAuction',
               args: [auctionId]
-            }) as any
+            }) as Auction
             
             if (auctionData.seller !== '0x0000000000000000000000000000000000000000') {
               allAuctionIds.add(auctionId)
@@ -672,6 +701,7 @@ export function useAllAuctions() {
             }
           } catch (error) {
             // Auction doesn't exist, continue
+            console.log(error)
             continue
           }
         }
@@ -732,7 +762,7 @@ export function useAllAuctions() {
           const timeRemaining = Math.max(0, endTime - now)
           
           // Fetch basic NFT metadata (skip if network issues)
-          let nftMetadata: any = {
+          let nftMetadata: NFTMetadata = {
             name: tokenIds.length > 1 ? `NFT Collection (${tokenIds.length} items)` : 'NFT',
             description: tokenIds.length > 1 ? `Collection of ${tokenIds.length} NFTs` : 'NFT for auction',
             image: '/placeholder.svg'
@@ -930,7 +960,7 @@ export function useActiveAuctions(auctionType?: AuctionType) {
           const timeRemaining = Math.max(0, endTime - now)
           
           // Fetch basic NFT metadata (just name for listing)
-          let nftMetadata: any = {
+          let nftMetadata: NFTMetadata = {
             name: tokenIds.length > 1 ? `NFT Collection (${tokenIds.length} items)` : 'NFT',
             description: tokenIds.length > 1 ? `Collection of ${tokenIds.length} NFTs` : 'NFT for auction',
             image: '/placeholder.svg'
@@ -1029,17 +1059,17 @@ export function useActiveAuctions(auctionType?: AuctionType) {
 }
 
 // ✅ Hook for user's auctions (created by user)
-export function useUserAuctions(userAddress?: string) {
-  const { address } = useAccount()
-  const targetAddress = userAddress || address
+// export function useUserAuctions(userAddress?: string) {
+//   const { address } = useAccount()
+//  //const targetAddress = userAddress || address
   
-  return useActiveAuctions() // You might want to create a specific hook for this
-}
+//   return useActiveAuctions() // You might want to create a specific hook for this
+// }
 
 // ✅ Hook for user's bids (auctions user has bid on)
-export function useUserBids(userAddress?: string) {
-  const { address } = useAccount()
-  const targetAddress = userAddress || address
+// export function useUserBids(userAddress?: string) {
+//   //const { address } = useAccount()
+//   //const targetAddress = userAddress || address
   
-  return useActiveAuctions() // You might want to create a specific hook for this
-}
+//   return useActiveAuctions() // You might want to create a specific hook for this
+// }

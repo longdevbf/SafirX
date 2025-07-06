@@ -1,5 +1,16 @@
 import { MintNFTParams } from "@/lib/contracts/nft-types"
-
+interface NFTMetadata {
+  name: string
+  description: string
+  image: string
+  external_url?: string
+  attributes: Array<{
+    trait_type: string
+    value: string
+  }>
+  unlockable_content?: string
+  explicit_content?: boolean
+}
 export class UploadService {
   private static async uploadToPinata(file: File): Promise<string> {
     try {
@@ -26,7 +37,7 @@ export class UploadService {
     }
   }
 
-  private static async uploadMetadata(metadata: any): Promise<string> {
+  private static async uploadMetadata(metadata: NFTMetadata): Promise<string> {
     try {
       // FIX: Sử dụng /api/metadata thay vì /api/upload/metadata
       const response = await fetch('/api/metadata', {

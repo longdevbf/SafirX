@@ -29,7 +29,7 @@ import {
   Gavel,
   Heart,
   Lock,
-  Wallet,
+  
   Copy,
 } from "lucide-react"
 
@@ -78,11 +78,14 @@ export default function Header() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">N</span>
-            </div>
-            <span className="text-xl font-bold">SafirX</span>
+          <Link href="/" className="flex items-center space-x-3">
+            
+               <img 
+              src="/assets/logo.png" 
+              alt="SafirX Logo" 
+              className="w-29 h-29 object-contain"/>
+            
+            
           </Link>
 
           {/* Desktop Navigation */}

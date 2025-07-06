@@ -4,7 +4,7 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 
 })
-export const sql = async (strings: TemplateStringsArray, ...values: any[]) => {
+export const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
   const client: PoolClient = await pool.connect()
   
   try {
@@ -69,7 +69,7 @@ export const userQueries = {
   }) {
     try {
       const updates: string[] = []
-      const values: any[] = []
+      const values: unknown[] = []
       let paramCount = 1
 
       // Build dynamic update query

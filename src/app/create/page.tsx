@@ -672,7 +672,7 @@ export default function CreatePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="oasis">Oasis Network</SelectItem>
+                        <SelectItem value="oasis">Oasis Sapphire</SelectItem>
                         <SelectItem value="ethereum">Ethereum</SelectItem>
                         <SelectItem value="polygon">Polygon</SelectItem>
                         <SelectItem value="arbitrum">Arbitrum</SelectItem>

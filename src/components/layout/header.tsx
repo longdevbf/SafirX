@@ -105,19 +105,14 @@ export default function Header() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/collections" className="flex items-center gap-2">
+                  <Link href="/create/collection" className="flex items-center gap-2">
                     <Grid3X3 className="w-4 h-4" />
                     Collections
                   </Link>
                 </DropdownMenuItem>
+                
                 <DropdownMenuItem asChild>
                   <Link href="/auctions" className="flex items-center gap-2">
-                    <Gavel className="w-4 h-4" />
-                    Auctions
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/auctions/sealed" className="flex items-center gap-2">
                     <Lock className="w-4 h-4" />
                     Sealed Auctions
                   </Link>

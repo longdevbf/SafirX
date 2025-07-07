@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+![Screenshot 2025-07-06 160459](https://github.com/user-attachments/assets/85309d72-6658-4e50-a188-5e5e5b01997e)
+SafirX - Private NFT Marketplace on Oasis Sapphire
+🌐 English Description
+SafirX is a decentralized NFT marketplace built on Oasis Sapphire, supporting both standard NFT trading and private auctions. It leverages the confidential compute layer of Sapphire to enable encrypted bidding where no one else can see the bid value during the auction.
 
-## Getting Started
+🚀 Getting Started
+To clone and run the project locally:
 
-First, run the development server:
-
-```bash
+bash
+Sao chép
+Chỉnh sửa
+git clone https://github.com/longdevbf/SafirX
+cd SafirX
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Then open your browser at http://localhost:3000.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+🔧 Features
+✅ Mint single NFT
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+✅ Mint NFT collection
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+✅ Private auction for single NFTs
 
-## Learn More
+✅ Private auction for NFT collections
 
-To learn more about Next.js, take a look at the following resources:
+✅ Public NFT marketplace where:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Users can buy/sell NFTs.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Sellers can update prices or cancel listings.
 
-## Deploy on Vercel
+✅ Private Auction Mode:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Real-time updates.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+All bids are encrypted using Oasis Sapphire — other users can't see them.
+
+When the auction ends, anyone can finalize the result.
+
+The winner receives the NFT.
+
+Others get refunded automatically.
+
+If all bids are lower than the reverse price, no one wins.
+
+If the seller chose to make bid history public after the auction, users can view auction details post-completion.

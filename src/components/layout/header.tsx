@@ -222,12 +222,6 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/favorites" className="flex items-center gap-2 cursor-pointer">
-                      <Heart className="w-4 h-4" />
-                      Favorites
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
                     <Link href="/create" className="flex items-center gap-2 cursor-pointer">
                       <Plus className="w-4 h-4" />
                       Create NFT

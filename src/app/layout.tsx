@@ -11,7 +11,7 @@ import { Providers } from "@/components/provider/provider"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Nexelra - Premier NFT Marketplace",
+  title: "SafirX - Premier NFT Marketplace",
   description: "Discover, create, and trade extraordinary NFTs on the world's premier marketplace",
   generator: 'Thomas',
   icons: {

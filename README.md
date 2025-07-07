@@ -40,6 +40,7 @@ If the seller chose to make bid history public after the auction, users can view
 
 ## 🚀 Getting Started
 Link Project: https://safir-x.vercel.app/<br>
+Link Contract: https://github.com/longdevbf/SafirX-Contract<br>
 To clone and run the project locally:
 
 ```bash

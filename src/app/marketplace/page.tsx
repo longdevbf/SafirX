@@ -26,6 +26,8 @@ import { useMarketplaceNFTs, useNFTMarket, useCollectionDetail } from "@/hooks/u
 import { ProcessedNFT } from "@/interfaces/nft"
 import { useToast } from "@/hooks/use-toast"
 import { useMarketplace } from "@/context/marketplaceContext"
+import { getRosePrice } from "@/services/rose_usd"
+
 export default function MarketplacePage() {
   const [selectedTab, setSelectedTab] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -41,6 +43,7 @@ export default function MarketplacePage() {
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null)
   const [processingNFT, setProcessingNFT] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [rosePrice, setRosePrice] = useState<number | null>(0.05)
 
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
@@ -578,8 +581,14 @@ export default function MarketplacePage() {
                       <div className="text-sm text-muted-foreground">Available</div>
                     </div>
                     <div className="text-center p-4 bg-muted rounded-lg">
-                      <div className="text-2xl font-bold">{collectionData.bundlePrice ? `${Number(collectionData.bundlePrice) / 1e18} ROSE` : 'Varies'}</div>
-                      <div className="text-sm text-muted-foreground">Price</div>
+                      <div className="text-2xl font-bold">
+                        {collectionData.bundlePrice ? `${Number(collectionData.bundlePrice) / 1e18} ROSE` : 'Varies'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {rosePrice && collectionData.bundlePrice ? 
+                          `≈ $${((Number(collectionData.bundlePrice) / 1e18) * rosePrice).toFixed(2)}` : 
+                          'Price'}
+                      </div>
                     </div>
                   </div>
 
@@ -776,6 +785,14 @@ export default function MarketplacePage() {
                           </div>
                         </div>
 
+                        <div className="text-xs text-muted-foreground">
+                          {rosePrice ? (
+                            `≈ $${((parseFloat(item.price || "0")) * rosePrice).toFixed(2)}`
+                          ) : (
+                            "Loading..."
+                          )}
+                        </div>
+
                         <div className="flex gap-2">
                           {isBundle ? (
                             <Badge variant="outline" className="flex-1 justify-center">
@@ -826,6 +843,20 @@ export default function MarketplacePage() {
       </div>
     )
   }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const fetchRosePrice = async () => {
+      const price = await getRosePrice();
+      if (price) setRosePrice(price);
+    };
+    
+    fetchRosePrice();
+    
+    // Cập nhật giá mỗi 5 phút
+    const interval = setInterval(fetchRosePrice, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -1105,7 +1136,11 @@ export default function MarketplacePage() {
                               </div>
                               <div className="font-bold">{nft.price} ROSE</div>
                               <div className="text-xs text-muted-foreground">
-                                ≈ ${((parseFloat(nft.price?.toString() || "0")) * 0.05).toFixed(2)}
+                                {rosePrice ? (
+                                  `≈ $${((parseFloat(nft.price || "0")) * rosePrice).toFixed(2)}`
+                                ) : (
+                                  "Đang tải giá..."
+                                )}
                               </div>
                             </div>
                             <div className="text-right">

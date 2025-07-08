@@ -83,14 +83,10 @@ export default function AuctionsPage() {
     error: transactionError
   } = useSealedBidAuction()
   console.log(isUpdatingBid);
-  // ✅ Group auctions by state with enhanced debug logging
   const groupedAuctions = useMemo(() => {
     const now = Math.floor(Date.now() / 1000)
     
-    // Debug logging
-    console.log('=== MAIN AUCTION PAGE GROUPING DEBUG ===')
-    console.log('Current time (unix):', now, '| Human time:', new Date(now * 1000).toLocaleString())
-    console.log('Total auctions fetched:', auctions.length)
+  
     
     // Log each auction's details
     auctions.forEach((auction, index) => {
@@ -152,11 +148,7 @@ export default function AuctionsPage() {
       return isFinalized
     })
     
-    console.log('📊 GROUPING RESULTS:')
-    console.log('Active:', active.length, '| IDs:', active.map(a => a.auctionId.toString()))
-    console.log('Ended:', ended.length, '| IDs:', ended.map(a => a.auctionId.toString()))
-    console.log('Finalized:', finalized.length, '| IDs:', finalized.map(a => a.auctionId.toString()))
-    console.log('=== END DEBUG ===')
+    
     
     return { active, ended, finalized }
   }, [auctions])

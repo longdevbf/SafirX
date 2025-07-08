@@ -12,6 +12,7 @@ async function getRosePrice(): Promise<number | null> {
     
     const data: PriceResponse = await response.json();
     const price = data['oasis-network'].usd;
+    console.log(price);
     return price;
     
   } catch (error) {
@@ -20,3 +21,4 @@ async function getRosePrice(): Promise<number | null> {
   }
 }
 
+getRosePrice();

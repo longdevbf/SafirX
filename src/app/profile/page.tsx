@@ -739,6 +739,7 @@ export default function ProfilePage() {
   }
 
   // ✅ NEW: Clear approval cache for a specific contract
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const clearApprovalCache = (contractAddress: string) => {
     setMarketplaceApprovalStatus(prev => {
       const updated = { ...prev }
@@ -1065,32 +1066,7 @@ export default function ProfilePage() {
                   </Select>
                 </div>
 
-                {/* ✅ DEBUG: Approval status and debug tools */}
-                {process.env.NODE_ENV === 'development' && (
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h4 className="text-sm font-medium mb-2">Debug Info</h4>
-                    <div className="space-y-2 text-xs">
-                      <div>Contract: {nft.contractAddress}</div>
-                      <div>Cached Approval: {marketplaceApprovalStatus[nft.contractAddress] ? '✅ Yes' : '❌ No'}</div>
-                      <div>Transaction Status: {transactionStatus}</div>
-                      <div>Transaction Type: {currentTransactionType || 'None'}</div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          clearApprovalCache(nft.contractAddress)
-                          toast({
-                            title: "🧹 Cache Cleared",
-                            description: "Approval cache cleared for this contract. Next listing attempt will do fresh approval check.",
-                          })
-                        }}
-                        className="text-xs"
-                      >
-                        Clear Approval Cache
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                
 
               {/* ✅ FIXED: Transaction status display within scrollable area */}
               {(isCurrentNFTLoading || hasTransactionStatus) && (

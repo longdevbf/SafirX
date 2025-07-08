@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -49,10 +49,10 @@ import Link from "next/link"
 import { formatEther, parseEther } from "viem"
 import { useWallet } from "@/context/walletContext"
 import { 
-  useAllAuctions, 
   useSealedBidAuction, 
   ProcessedAuction
 } from "@/hooks/use-auction"
+import { useAuction } from "@/context/auctionContext"
 import { toast } from "@/hooks/use-toast"
 //import { AuctionState } from "@/abis/AuctionSealedBid"
 import { BidHistoryDialog } from "@/components/BidHistoryDialog"
@@ -66,9 +66,9 @@ export default function AuctionsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
-  
-  const { address, isConnected } = useWallet()
-  const { auctions, loading, error, refetch } = useAllAuctions() // ✅ Fetch ALL auctions (active + ended + finalized)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { groupedAuctions, loading, error, refetch, auctions } = useAuction()
+  const { address, isConnected } = useWallet()// ✅ Fetch ALL auctions (active + ended + finalized)
   
   const {
     placeBid,
@@ -83,75 +83,6 @@ export default function AuctionsPage() {
     error: transactionError
   } = useSealedBidAuction()
   console.log(isUpdatingBid);
-  const groupedAuctions = useMemo(() => {
-    const now = Math.floor(Date.now() / 1000)
-    
-  
-    
-    // Log each auction's details
-    auctions.forEach((auction, index) => {
-      const endTime = Number(auction.endTime)
-      const timeRemaining = Math.max(0, endTime - now)
-      const endTimeHuman = new Date(endTime * 1000).toLocaleString()
-      const timeRemainingMins = Math.floor(timeRemaining / 60)
-      
-      console.log(`[${index + 1}] Auction ${auction.auctionId}:`, {
-        title: auction.title,
-        state: auction.state,
-        stateName: auction.state === 0 ? 'ACTIVE' : auction.state === 1 ? 'FINALIZED' : 'CANCELLED',
-        endTime: endTime,
-        endTimeHuman: endTimeHuman,
-        timeRemaining: timeRemaining,
-        timeRemainingMins: timeRemainingMins,
-        currentTime: now,
-        hasTimeLeft: timeRemaining > 0,
-        isActive: auction.isActive,
-        isFinalized: auction.isFinalized,
-        isCancelled: auction.isCancelled
-      })
-    })
-    
-    // ✅ Fixed logic: Use actual state and calculated timeRemaining
-    const active = auctions.filter(auction => {
-      const endTime = Number(auction.endTime)
-      const timeRemaining = Math.max(0, endTime - now)
-      const isActiveState = auction.state === 0
-      const hasTimeLeft = timeRemaining > 0
-      const shouldBeActive = isActiveState && hasTimeLeft
-      
-      if (isActiveState && !hasTimeLeft) {
-        console.log(`⏰ Auction ${auction.auctionId} should move to ENDED (state=0 but time expired)`)
-      }
-      
-      return shouldBeActive
-    })
-    
-    const ended = auctions.filter(auction => {
-      const endTime = Number(auction.endTime)
-      const timeRemaining = Math.max(0, endTime - now)
-      const isActiveState = auction.state === 0
-      const hasTimeExpired = timeRemaining <= 0
-      const shouldBeEnded = isActiveState && hasTimeExpired
-      
-      if (shouldBeEnded) {
-        console.log(`✅ Auction ${auction.auctionId} correctly identified as ENDED`)
-      }
-      
-      return shouldBeEnded
-    })
-    
-    const finalized = auctions.filter(auction => {
-      const isFinalized = auction.state === 1 || auction.state === 2
-      if (isFinalized) {
-        console.log(`🏁 Auction ${auction.auctionId} is FINALIZED/CANCELLED (state=${auction.state})`)
-      }
-      return isFinalized
-    })
-    
-    
-    
-    return { active, ended, finalized }
-  }, [auctions])
 
   // ✅ Handle transaction success
   useEffect(() => {

@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useAuction } from "@/context/auctionContext"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ConnectWallet } from "@/components/ConnectWallet"
 import { useWallet } from "@/context/walletContext"
@@ -39,6 +40,8 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { isConnected, address, disconnect } = useWallet()
   const { user, loading } = useUserProfile()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { loading: isLoadingAuctions } = useAuction()
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`

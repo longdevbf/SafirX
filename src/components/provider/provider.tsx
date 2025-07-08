@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { WalletProvider } from "@/context/walletContext";
 import {config} from '@/components/config/wagmiConfig'
 import  {MarketplaceProvider}  from "@/context/marketplaceContext"
+import { AuctionProvider } from '@/context/auctionContext'
 const queryClient = new QueryClient();
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -20,7 +21,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
             <WalletProvider>
               <MarketplaceProvider>
+              <AuctionProvider>
               {children}
+              </AuctionProvider>
               </MarketplaceProvider>
             </WalletProvider>
           </ThemeProvider>

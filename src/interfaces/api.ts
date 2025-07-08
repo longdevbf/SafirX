@@ -9,3 +9,8 @@ export interface PaginatedResponse<T> {
   limit: number;
   offset: number;
 }
+export interface PriceResponse {
+  'oasis-network': {
+    usd: number;
+  };
+}

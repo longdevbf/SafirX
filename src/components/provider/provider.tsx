@@ -9,6 +9,7 @@ import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { ThemeProvider } from "@/components/theme-provider";
 import { WalletProvider } from "@/context/walletContext";
 import {config} from '@/components/config/wagmiConfig'
+import  {MarketplaceProvider}  from "@/context/marketplaceContext"
 const queryClient = new QueryClient();
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -18,7 +19,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <RainbowKitProvider>
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
             <WalletProvider>
+              <MarketplaceProvider>
               {children}
+              </MarketplaceProvider>
             </WalletProvider>
           </ThemeProvider>
         </RainbowKitProvider>

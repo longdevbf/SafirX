@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
@@ -20,10 +21,11 @@ import {
 import Image from "next/image"
 //import Link from "next/link"
 import { useWallet } from "@/context/walletContext"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { useMarketplaceNFTs, useNFTMarket, useCollectionDetail } from "@/hooks/use-market"
 import { ProcessedNFT } from "@/interfaces/nft"
 import { useToast } from "@/hooks/use-toast"
-
+import { useMarketplace } from "@/context/marketplaceContext"
 export default function MarketplacePage() {
   const [selectedTab, setSelectedTab] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -42,12 +44,19 @@ export default function MarketplacePage() {
 
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
+  const {
+    nfts,
+    loading,
+    error,
+    pageLoading,
+    loadMoreNFTs,
+    hasMore,
+    collections,
+    rarities,
+    refetch,
+    total
+  } = useMarketplace()
   
-  // ✅ FIXED: Always call ALL hooks at the top level - no conditional hooks
-  const { 
-    nfts, loading, error, total, refetch, collections, rarities
-  } = useMarketplaceNFTs()
-  console.log(total, collections, rarities);
   const {
     buyNFTUnified, updatePrice, updateBundlePrice, 
     cancelListingUnified, hash, error: marketError, 

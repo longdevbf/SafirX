@@ -48,9 +48,9 @@ export default function MarketplacePage() {
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
   const {
-    nfts,
-    loading,
-    error,
+    nfts = [],
+    loading = true,
+    error = null,
     pageLoading,
     loadMoreNFTs,
     hasMore,
@@ -58,7 +58,7 @@ export default function MarketplacePage() {
     rarities,
     refetch,
     total
-  } = useMarketplace()
+  } = useMarketplace() || {}
   
   const {
     buyNFTUnified, updatePrice, updateBundlePrice, 

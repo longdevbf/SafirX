@@ -46,9 +46,7 @@ export default function Header() {
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
-  const renderMarketplaceStatus = () => {
-    return null
-  }
+  
   const copyAddress = () => {
     if (address) {
       navigator.clipboard.writeText(address)
@@ -142,7 +140,7 @@ export default function Header() {
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input placeholder="Search collections, NFTs, and accounts" className="pl-10 pr-4" />
-              {renderMarketplaceStatus()}
+              
             </div>
           </div>
 

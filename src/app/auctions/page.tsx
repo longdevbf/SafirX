@@ -1046,32 +1046,6 @@ export default function AuctionsPage() {
             </div>
           )}
 
-          {/* Error state */}
-          {error && (
-            <Alert variant="destructive" className="mt-6">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <div className="space-y-2">
-                  <div className="font-semibold">Failed to load auctions</div>
-                  <div className="text-sm">{error}</div>
-                  {error.includes('network') || error.includes('Failed to fetch') ? (
-                    <div className="text-sm text-muted-foreground">
-                      This appears to be a network connectivity issue. Please check:
-                      <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>Your internet connection</li>
-                        <li>The Oasis Sapphire testnet is accessible</li>
-                        <li>Try refreshing the page</li>
-                      </ul>
-                    </div>
-                  ) : null}
-                  <Button onClick={() => refetch()} size="sm" className="mt-2">
-                    <RefreshCw className="w-3 h-3 mr-1" />
-                    Try Again
-                  </Button>
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
 
           {/* Active Bidding Phase */}
           <TabsContent value="active" className="space-y-6">

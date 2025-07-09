@@ -31,9 +31,9 @@ import { getRosePrice } from "@/services/rose_usd"
 // Helper function for robust ID extraction
 const getListingId = (nft: ProcessedNFT): string => {
   // Priority: listingId > collectionId > id
-  const id = nft.listingId || nft.collectionId || nft.id || ''
+  const id = nft?.listingId || nft?.collectionId || nft?.id || ''
   
-  if (!id || id === 'undefined' || id === 'null') {
+  if (!id || id === 'undefined' || id === 'null' || !nft) {
     console.error('❌ Invalid NFT ID:', nft)
     throw new Error(`Invalid listing ID: ${id}`)
   }
@@ -152,7 +152,16 @@ export default function MarketplacePage() {
 
   // ✅ FIXED: Define utility functions before using them
   const getNFTId = useCallback((nft: ProcessedNFT) => {
-    return getListingId(nft)
+    if (!nft) {
+      console.warn('⚠️ getNFTId called with empty NFT')
+      return ''
+    }
+    try {
+      return getListingId(nft)
+    } catch (error) {
+      console.warn('⚠️ Failed to get NFT ID:', error)
+      return ''
+    }
   }, [])
 
   const isProcessing = useCallback((nft: ProcessedNFT) => {

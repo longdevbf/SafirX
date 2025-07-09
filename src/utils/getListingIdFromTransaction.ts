@@ -8,13 +8,6 @@ const publicClient = createPublicClient({
   transport: http()
 })
 
-// Event signatures for different listing types
-const LISTING_EVENTS = {
-  SingleListing: 'event SingleListing(uint256 indexed listingId, address indexed nftContract, uint256 indexed tokenId, address seller, uint256 price)',
-  CollectionListing: 'event CollectionListing(uint256 indexed collectionId, address indexed nftContract, uint256[] tokenIds, address seller, uint256 price, bool isBundle, string collectionName)',
-  // Add more events as needed
-}
-
 // Extract listing ID from transaction receipt
 export async function getListingIdFromTransaction(txHash: string): Promise<{
   listingId: string | null
@@ -43,62 +36,65 @@ export async function getListingIdFromTransaction(txHash: string): Promise<{
     })
 
     console.log('🔍 Parsed logs:', parsedLogs.length)
+    console.log('📋 Available events:', parsedLogs.map(log => (log as any).eventName))
 
-    // Look for SingleListing event
-    const singleListingEvent = parsedLogs.find(log => log.eventName === 'SingleListing')
-    if (singleListingEvent) {
-      const listingId = singleListingEvent.args.listingId?.toString()
-      console.log('✅ Found SingleListing event, listingId:', listingId)
-      return { 
-        listingId, 
-        collectionId: null, 
-        type: 'single' 
+    // Look for listing events
+    for (const log of parsedLogs) {
+      const logAny = log as any
+      const eventName = logAny.eventName
+      const args = logAny.args
+
+      console.log('🔍 Checking event:', eventName, 'args:', args)
+
+      // Check for single listing events
+      if (eventName === 'SingleListing' || eventName === 'ItemListed' || eventName === 'NFTListed') {
+        const listingId = args?.listingId?.toString() || args?.id?.toString() || args?.tokenId?.toString()
+        if (listingId) {
+          console.log('✅ Found single listing event:', eventName, 'listingId:', listingId)
+          return { 
+            listingId, 
+            collectionId: null, 
+            type: 'single' 
+          }
+        }
       }
-    }
 
-    // Look for CollectionListing event
-    const collectionListingEvent = parsedLogs.find(log => log.eventName === 'CollectionListing')
-    if (collectionListingEvent) {
-      const collectionId = collectionListingEvent.args.collectionId?.toString()
-      console.log('✅ Found CollectionListing event, collectionId:', collectionId)
-      return { 
-        listingId: null, 
-        collectionId, 
-        type: 'collection' 
+      // Check for collection listing events
+      if (eventName === 'CollectionListing' || eventName === 'BundleListed') {
+        const collectionId = args?.collectionId?.toString() || args?.bundleId?.toString() || args?.id?.toString()
+        if (collectionId) {
+          console.log('✅ Found collection listing event:', eventName, 'collectionId:', collectionId)
+          return { 
+            listingId: null, 
+            collectionId, 
+            type: 'collection' 
+          }
+        }
       }
-    }
 
-    // Look for any other listing-related events
-    const listingRelatedEvents = parsedLogs.filter(log => 
-      log.eventName?.toLowerCase().includes('listing') || 
-      log.eventName?.toLowerCase().includes('list')
-    )
+      // Check for any other listing-related events
+      if (eventName?.toLowerCase().includes('listing') || eventName?.toLowerCase().includes('list')) {
+        console.log('🔍 Found listing-related event:', eventName)
+        
+        // Try to extract ID from various possible fields
+        const possibleIds = [
+          args?.listingId,
+          args?.collectionId,
+          args?.id,
+          args?.tokenId,
+          args?._listingId,
+          args?._collectionId,
+          args?._id
+        ].filter(id => id !== undefined)
 
-    if (listingRelatedEvents.length > 0) {
-      console.log('🔍 Found listing-related events:', listingRelatedEvents.map(e => e.eventName))
-      
-      // Try to extract ID from first event
-      const firstEvent = listingRelatedEvents[0]
-      const args = firstEvent.args as any
-      
-      // Common patterns for listing IDs
-      const possibleIds = [
-        args.listingId,
-        args.collectionId,
-        args.id,
-        args.tokenId,
-        args._listingId,
-        args._collectionId,
-        args._id
-      ].filter(id => id !== undefined)
-
-      if (possibleIds.length > 0) {
-        const id = possibleIds[0].toString()
-        console.log('✅ Extracted ID from event:', id)
-        return { 
-          listingId: id, 
-          collectionId: null, 
-          type: 'unknown' 
+        if (possibleIds.length > 0) {
+          const id = possibleIds[0].toString()
+          console.log('✅ Extracted ID from generic listing event:', id)
+          return { 
+            listingId: id, 
+            collectionId: null, 
+            type: 'unknown' 
+          }
         }
       }
     }
@@ -128,6 +124,8 @@ export async function getLatestListingIdForUser(userAddress: string): Promise<st
       console.log('❌ No NFTs found in marketplace')
       return null
     }
+
+    console.log('📋 Found', allNFTs.length, 'NFTs in marketplace')
 
     // Check each NFT to find the latest one from this user
     for (let i = allNFTs.length - 1; i >= 0; i--) {

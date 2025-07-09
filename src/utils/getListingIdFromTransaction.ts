@@ -47,10 +47,10 @@ export async function getListingIdFromTransaction(txHash: string): Promise<{
       console.log('🔍 Checking event:', eventName, 'args:', args)
 
       // Check for single listing events
-      if (eventName === 'SingleListing' || eventName === 'ItemListed' || eventName === 'NFTListed') {
-        const listingId = args?.listingId?.toString() || args?.id?.toString() || args?.tokenId?.toString()
+      if (eventName === 'SingleListing') {
+        const listingId = args?.listingId?.toString()
         if (listingId) {
-          console.log('✅ Found single listing event:', eventName, 'listingId:', listingId)
+          console.log('✅ Found SingleListing event, listingId:', listingId)
           return { 
             listingId, 
             collectionId: null, 
@@ -60,40 +60,14 @@ export async function getListingIdFromTransaction(txHash: string): Promise<{
       }
 
       // Check for collection listing events
-      if (eventName === 'CollectionListing' || eventName === 'BundleListed') {
-        const collectionId = args?.collectionId?.toString() || args?.bundleId?.toString() || args?.id?.toString()
+      if (eventName === 'CollectionListing') {
+        const collectionId = args?.collectionId?.toString()
         if (collectionId) {
-          console.log('✅ Found collection listing event:', eventName, 'collectionId:', collectionId)
+          console.log('✅ Found CollectionListing event, collectionId:', collectionId)
           return { 
             listingId: null, 
             collectionId, 
             type: 'collection' 
-          }
-        }
-      }
-
-      // Check for any other listing-related events
-      if (eventName?.toLowerCase().includes('listing') || eventName?.toLowerCase().includes('list')) {
-        console.log('🔍 Found listing-related event:', eventName)
-        
-        // Try to extract ID from various possible fields
-        const possibleIds = [
-          args?.listingId,
-          args?.collectionId,
-          args?.id,
-          args?.tokenId,
-          args?._listingId,
-          args?._collectionId,
-          args?._id
-        ].filter(id => id !== undefined)
-
-        if (possibleIds.length > 0) {
-          const id = possibleIds[0].toString()
-          console.log('✅ Extracted ID from generic listing event:', id)
-          return { 
-            listingId: id, 
-            collectionId: null, 
-            type: 'unknown' 
           }
         }
       }
@@ -108,7 +82,7 @@ export async function getListingIdFromTransaction(txHash: string): Promise<{
   }
 }
 
-// Alternative method: Get listing ID by querying smart contract directly
+// Alternative method: Get latest listing ID for user
 export async function getLatestListingIdForUser(userAddress: string): Promise<string | null> {
   try {
     console.log('🔍 Getting latest listing ID for user:', userAddress)
@@ -139,7 +113,13 @@ export async function getLatestListingIdForUser(userAddress: string): Promise<st
           args: [nftId],
         }) as any
 
-        if (listingInfo && listingInfo.seller?.toLowerCase() === userAddress.toLowerCase()) {
+        console.log(`📋 Checking NFT ${nftId}: seller=${listingInfo[3]}, active=${listingInfo[5]}`)
+        
+        // listingInfo is array: [isBundle, tokenId, nftContract, seller, price, isActive, collectionName, tokenIds]
+        const seller = listingInfo[3]
+        const isActive = listingInfo[5]
+        
+        if (seller && seller.toLowerCase() === userAddress.toLowerCase() && isActive) {
           console.log('✅ Found latest listing for user:', nftId.toString())
           return nftId.toString()
         }
@@ -149,7 +129,7 @@ export async function getLatestListingIdForUser(userAddress: string): Promise<st
       }
     }
 
-    console.log('❌ No listings found for user:', userAddress)
+    console.log('❌ No active listings found for user:', userAddress)
     return null
 
   } catch (error) {
@@ -158,24 +138,28 @@ export async function getLatestListingIdForUser(userAddress: string): Promise<st
   }
 }
 
-// Validate if a listing ID exists and is active
-export async function validateListingId(listingId: string): Promise<boolean> {
+// Get absolute latest listing ID from smart contract
+export async function getAbsoluteLatestListingId(): Promise<string | null> {
   try {
-    console.log('🔍 Validating listing ID:', listingId)
+    console.log('🔍 Getting absolute latest listing ID from smart contract')
     
-    const listingInfo = await publicClient.readContract({
+    const allNFTs = await publicClient.readContract({
       address: NFT_MARKET_CONFIG.address,
       abi: NFT_MARKET_CONFIG.abi,
-      functionName: 'getListingInfo',
-      args: [BigInt(listingId)],
-    }) as any
+      functionName: 'getAllAvailableNFTs',
+    }) as bigint[]
 
-    const isValid = listingInfo && listingInfo.isActive
-    console.log('✅ Listing ID validation result:', isValid)
-    return isValid
+    if (!allNFTs || allNFTs.length === 0) {
+      console.log('❌ No NFTs found in marketplace')
+      return null
+    }
+
+    const latestId = allNFTs[allNFTs.length - 1]
+    console.log('✅ Absolute latest listing ID:', latestId.toString())
+    return latestId.toString()
 
   } catch (error) {
-    console.error('❌ Error validating listing ID:', error)
-    return false
+    console.error('❌ Error getting absolute latest listing ID:', error)
+    return null
   }
 }

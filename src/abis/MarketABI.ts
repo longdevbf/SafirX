@@ -1,6 +1,62 @@
 import { Address } from 'viem'
 
 export const NFT_MARKET_ABI = [
+  // ✅ EVENTS
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256"},
+      {"indexed": true, "internalType": "address", "name": "nftContract", "type": "address"},
+      {"indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256"},
+      {"indexed": false, "internalType": "address", "name": "seller", "type": "address"},
+      {"indexed": false, "internalType": "uint256", "name": "price", "type": "uint256"}
+    ],
+    "name": "SingleListing",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "collectionId", "type": "uint256"},
+      {"indexed": true, "internalType": "address", "name": "nftContract", "type": "address"},
+      {"indexed": false, "internalType": "address", "name": "seller", "type": "address"},
+      {"indexed": false, "internalType": "uint256[]", "name": "tokenIds", "type": "uint256[]"},
+      {"indexed": false, "internalType": "uint256", "name": "bundlePrice", "type": "uint256"},
+      {"indexed": false, "internalType": "string", "name": "collectionName", "type": "string"}
+    ],
+    "name": "CollectionListing",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256"},
+      {"indexed": true, "internalType": "address", "name": "buyer", "type": "address"},
+      {"indexed": false, "internalType": "uint256", "name": "price", "type": "uint256"}
+    ],
+    "name": "NFTPurchased",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "oldPrice", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "newPrice", "type": "uint256"}
+    ],
+    "name": "PriceUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256"},
+      {"indexed": true, "internalType": "address", "name": "seller", "type": "address"}
+    ],
+    "name": "ListingCancelled",
+    "type": "event"
+  },
+
   // ✅ LISTING FUNCTIONS
   {
     "inputs": [

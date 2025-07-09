@@ -215,13 +215,20 @@ export default function ProfilePage() {
               
               // Fallback: Get latest listing ID for user if transaction parsing fails
               if (!realListingId) {
-                console.log('⚠️ Could not get listing ID from transaction, trying fallback method...')
+                console.log('⚠️ Could not get listing ID from transaction, trying user-specific fallback...')
                 realListingId = await getLatestListingIdForUser(address || '')
               }
               
+              // Final fallback: Get absolute latest listing ID
               if (!realListingId) {
-                console.error('❌ Could not determine real listing ID, using transaction hash as fallback')
-                realListingId = marketHash
+                console.log('⚠️ Could not find user-specific listing, trying absolute latest fallback...')
+                const { getAbsoluteLatestListingId } = await import('@/utils/getListingIdFromTransaction')
+                realListingId = await getAbsoluteLatestListingId()
+              }
+              
+              if (!realListingId) {
+                console.error('❌ Could not determine real listing ID using any method, skipping database sync')
+                return // Don't sync with transaction hash
               }
               
               console.log('✅ Using listing ID for database sync:', realListingId)

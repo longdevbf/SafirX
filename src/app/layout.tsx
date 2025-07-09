@@ -7,7 +7,6 @@ import '@rainbow-me/rainbowkit/styles.css';
 import Header from "@/components/layout/header"
 import Footer from "@/components/layout/footer"
 import { Providers } from "@/components/provider/provider"
-import { WalletDebug } from "@/components/debug/WalletDebug"
 
 const inter = Inter({ subsets: ["latin"] })
 

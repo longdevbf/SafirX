@@ -38,19 +38,27 @@ Expected response:
 
 ### 3. Test Workflow
 
-#### A. Profile Page - Sell NFT
-1. Vào Profile page
-2. Click "Sell" trên một NFT
-3. Nhập giá và confirm transaction
-4. Sau khi thành công, sẽ thấy:
+#### A. Profile Page - Sell NFT (Cần kết nối ví)
+1. Kết nối wallet trước
+2. Vào Profile page
+3. Click "Sell" trên một NFT
+4. Nhập giá và confirm transaction
+5. Sau khi thành công, sẽ thấy:
    - Toast: "🎉 NFT Listed Successfully!"
    - Toast: "✨ Database Synced"
 
-#### B. Marketplace Page - Check Speed
-1. Vào Marketplace page
-2. Page sẽ load < 1 giây (trước đây 5-10 giây)
-3. NFT vừa list sẽ xuất hiện ngay
-4. Thử search/filter - cực nhanh!
+#### B. Marketplace Page - Browse WITHOUT Wallet 🆕
+1. Vào Marketplace page (KHÔNG cần kết nối ví)
+2. Thấy banner thông báo: "Browse freely! Connect wallet to buy"
+3. Page sẽ load < 1 giây (cực nhanh!)
+4. Có thể search/filter thoải mái
+5. Click "Buy" sẽ yêu cầu kết nối ví
+
+#### C. Marketplace Page - With Wallet Connected
+1. Kết nối wallet
+2. Banner thông báo sẽ biến mất
+3. Có thể mua NFT trực tiếp
+4. Thấy "Edit Price" cho NFT của mình
 
 ### 4. API Testing
 

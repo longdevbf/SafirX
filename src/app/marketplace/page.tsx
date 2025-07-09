@@ -14,9 +14,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { 
+import {
   Search, Filter, Grid3X3, List, Heart, Eye, Star, Edit, AlertCircle, 
-  RefreshCw, Loader2, ShoppingCart, Tag, X, Package, ArrowLeft, Users
+  RefreshCw, Loader2, ShoppingCart, Tag, X, Package, ArrowLeft, Users, Wallet
 } from "lucide-react"
 import Image from "next/image"
 //import Link from "next/link"
@@ -845,16 +845,53 @@ export default function MarketplacePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Info Banner for non-connected users */}
+      {!isConnected && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-b">
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                  <ShoppingCart className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    🌟 Browse freely! Connect your wallet when you're ready to buy
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    All prices are cached for ultra-fast loading • No wallet required to explore
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+                <Wallet className="w-4 h-4 mr-2" />
+                Connect Wallet
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Marketplace</h1>
-            <p className="text-muted-foreground">Discover and collect extraordinary NFTs</p>
+            <h1 className="text-3xl font-bold mb-2">SafirX Marketplace</h1>
+            <p className="text-muted-foreground">
+              Discover and collect extraordinary NFTs on Oasis Sapphire
+              {!isConnected && (
+                <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                  Browse freely • Connect to buy
+                </span>
+              )}
+            </p>
             <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-              <span>NFTs: {nfts.filter(n => !n.isBundle).length}</span>
-              <span>Collections: {nfts.filter(n => n.isBundle).length}</span>
-              <span>Total: {nfts.length}</span>
+              <span>🎨 NFTs: {nfts.filter(n => !n.isBundle).length}</span>
+              <span>📦 Collections: {nfts.filter(n => n.isBundle).length}</span>
+              <span>🚀 Total Items: {nfts.length}</span>
+              {total > 0 && (
+                <span>💾 From Cache: {total}</span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1032,31 +1069,74 @@ export default function MarketplacePage() {
                     ))}
                   </div>
                 ) : error ? (
-                  <div className="text-center py-12">
-                    <Alert className="max-w-md mx-auto">
+                  <div className="text-center py-16">
+                    <div className="w-32 h-32 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
+                      <AlertCircle className="h-16 w-16 text-red-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-3">Connection Error</h3>
+                    <Alert className="max-w-md mx-auto mb-6" variant="destructive">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
-                        Error loading marketplace: {error}
+                        Failed to load marketplace data: {error}
                       </AlertDescription>
                     </Alert>
-                    <Button 
-                      onClick={handleRefresh} 
-                      className="mt-4"
-                      disabled={isRefreshing}
-                    >
-                      <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                      {isRefreshing ? 'Refreshing...' : 'Retry'}
-                    </Button>
+                    <div className="space-y-2 text-sm text-muted-foreground mb-6">
+                      <p>• Check your internet connection</p>
+                      <p>• Verify DATABASE_URL is configured</p>
+                      <p>• Try refreshing the page</p>
+                    </div>
+                    <div className="flex gap-2 justify-center">
+                      <Button 
+                        onClick={handleRefresh} 
+                        disabled={isRefreshing}
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        {isRefreshing ? 'Retrying...' : 'Try Again'}
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => window.location.href = '/api/test-db'}
+                      >
+                        Test Database
+                      </Button>
+                    </div>
                   </div>
                 ) : filteredNFTs.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-24 h-24 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
-                      <ShoppingCart className="h-12 w-12 text-muted-foreground" />
+                  <div className="text-center py-16">
+                    <div className="w-32 h-32 mx-auto mb-6 bg-gradient-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center">
+                      <ShoppingCart className="h-16 w-16 text-purple-500" />
                     </div>
-                    <h3 className="text-xl font-semibold mb-2">No NFTs Found</h3>
-                    <p className="text-muted-foreground">
-                      Try adjusting your filters or check back later.
+                    <h3 className="text-2xl font-bold mb-3">No NFTs Found</h3>
+                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                      {nfts.length === 0 
+                        ? "The marketplace is loading... Please wait while we fetch the latest NFTs."
+                        : "No NFTs match your current filters. Try adjusting your search criteria or browse all categories."
+                      }
                     </p>
+                    {nfts.length === 0 ? (
+                      <Button onClick={handleRefresh} disabled={isRefreshing}>
+                        <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        {isRefreshing ? 'Loading...' : 'Refresh Marketplace'}
+                      </Button>
+                    ) : (
+                      <div className="flex gap-2 justify-center">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            setSearchQuery("")
+                            setSelectedCollection([])
+                            setSelectedRarity([])
+                            setPriceRange([0, 1000000])
+                          }}
+                        >
+                          Clear Filters
+                        </Button>
+                        <Button onClick={handleRefresh} disabled={isRefreshing}>
+                          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* NFT Grid - Keep existing implementation */

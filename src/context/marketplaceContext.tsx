@@ -1,22 +1,26 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { useMarketplaceNFTs } from '@/hooks/use-market'
+import { useMarketplaceDB } from '@/hooks/use-marketplace-db'
 import { ProcessedNFT } from '@/interfaces/nft'
 
 // Define context type
 interface MarketplaceContextType {
   nfts: ProcessedNFT[]
   loading: boolean
-  pageLoading: boolean // Giữ nguyên, sẽ sửa ở phần khác
-  hasMore: boolean     // Giữ nguyên, sẽ sửa ở phần khác
+  pageLoading: boolean
+  hasMore: boolean
   error: string | null
   collections: string[]
   rarities: string[]
   loadMoreNFTs: () => Promise<void>
   refetch: () => Promise<void>
   isInitialized: boolean
-  total: number // Thêm total vào để truy cập
+  total: number
+  likeNFT: (listingId: string) => Promise<number>
+  updateNFTPrice: (listingId: string, newPrice: string) => Promise<unknown>
+  cancelNFTListing: (listingId: string) => Promise<boolean>
+  buyNFT: (listingId: string, buyerAddress: string) => Promise<unknown>
 }
 
 // Create context with default values
@@ -32,6 +36,10 @@ const MarketplaceContext = createContext<MarketplaceContextType>({
   refetch: async () => {},
   isInitialized: false,
   total: 0,
+  likeNFT: async () => 0,
+  updateNFTPrice: async () => null,
+  cancelNFTListing: async () => false,
+  buyNFT: async () => null,
 })
 
 export const useMarketplace = () => useContext(MarketplaceContext)
@@ -39,64 +47,73 @@ export const useMarketplace = () => useContext(MarketplaceContext)
 export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isInitialized, setIsInitialized] = useState(false)
   
-  // Lấy dữ liệu từ hook gốc
+  // Use database hook instead of blockchain
   const {
     nfts,
     loading,
     error,
-    collections,
+    collections: dbCollections,
     rarities,
-    refetch,
-    total
-  } = useMarketplaceNFTs()
+    loadMoreNFTs: dbLoadMore,
+    refetch: dbRefetch,
+    hasMore,
+    total,
+    likeNFT,
+    updateNFTPrice,
+    cancelNFTListing,
+    buyNFT
+  } = useMarketplaceDB()
 
-  // Thêm biến state để giả lập phân trang
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [hasLoaded, setHasLoaded] = useState(false)
   const [pageLoading, setPageLoading] = useState(false)
   
   // Set initialized when first batch of NFTs is loaded
   useEffect(() => {
-    if (!loading && nfts.length > 0) {
+    if (!loading && nfts.length >= 0) { // Allow empty arrays to be initialized
       setIsInitialized(true)
-      setHasLoaded(true)
     }
   }, [loading, nfts])
 
-  // Begin loading immediately when component mounts
-  useEffect(() => {
-  }, [])
+  // Extract collection names from database collections
+  const collections = dbCollections.map((col: { name: string }) => col.name)
   
-  // Tạo hàm loadMoreNFTs giả (sẽ không cần trong cách tiếp cận này)
+  // Wrapper for loadMoreNFTs with page loading state
   const loadMoreNFTs = async (): Promise<void> => {
+    if (!hasMore || pageLoading) return
+    
     setPageLoading(true)
     try {
-      // Chúng ta không thực sự load thêm vì hook gốc đã load hết
-      console.log("🔄 Simulating loading more NFTs...")
-      // Tạm dừng để giả lập loading
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await dbLoadMore()
     } finally {
       setPageLoading(false)
     }
   }
 
-  return (
-    <MarketplaceContext.Provider
-      value={{
-        nfts,
-        loading,
-        pageLoading,
-        error,
-        collections,
-        rarities,
-        loadMoreNFTs,
-        refetch,
-        hasMore: false, // Không cần phân trang vì load tất cả
-        isInitialized,
-        total,
-      }}
-    >
-      {children}
-    </MarketplaceContext.Provider>
-  )
+  // Wrapper for refetch
+  const refetch = async (): Promise<void> => {
+    await dbRefetch()
+  }
+
+      return (
+      <MarketplaceContext.Provider
+        value={{
+          nfts,
+          loading,
+          pageLoading,
+          error,
+          collections,
+          rarities,
+          loadMoreNFTs,
+          refetch,
+          hasMore,
+          isInitialized,
+          total,
+          likeNFT,
+          updateNFTPrice,
+          cancelNFTListing,
+          buyNFT,
+        }}
+      >
+        {children}
+      </MarketplaceContext.Provider>
+    )
 }

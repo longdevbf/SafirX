@@ -61,6 +61,9 @@ import { readContract } from "wagmi/actions"
 import { ERC721_ABI } from "@/abis/MarketABI"
 import { config } from "@/components/config/wagmiConfig"
 import { Checkbox } from "@/components/ui/checkbox"
+import { syncListingToDatabase, syncAuctionToDatabase, prepareListingData, prepareAuctionData } from "@/utils/syncToDatabase"
+import { getListingIdFromTransaction, getLatestListingIdForUser } from "@/utils/getListingIdFromTransaction"
+
 interface UserProfile {
   name: string
   description: string
@@ -77,6 +80,8 @@ export default function ProfilePage() {
   const [selectedNFT, setSelectedNFT] = useState<ProcessedNFT | null>(null)
   const [sellPrice, setSellPrice] = useState("")
   const [sellType, setSellType] = useState("fixed")
+  const [sellDescription, setSellDescription] = useState("")
+  const [sellCategory, setSellCategory] = useState("")
   const [showCollectionSelector, setShowCollectionSelector] = useState(false)
   const [isListingNFT, setIsListingNFT] = useState(false)
   const [isCollectionListing, setIsCollectionListing] = useState(false)
@@ -134,7 +139,7 @@ export default function ProfilePage() {
     isConfirming: isAuctionConfirming,
     isConfirmed: isAuctionConfirmed,
   } = useSealedBidAuction()
-  console.log(auctionError)
+  
   // ✅ NEW: Auction approval hook
   const {
     isApproved: isAuctionApproved,
@@ -198,6 +203,138 @@ export default function ProfilePage() {
         // ✅ FIXED: Track which NFT was successfully listed
         if (currentTransactionType === 'single' && selectedNFT) {
           setSuccessfulNFTId(`${selectedNFT.contractAddress}-${selectedNFT.tokenId}`)
+          
+          // ✅ NEW: Get real listing ID from transaction and sync to database
+          const syncWithRealListingId = async () => {
+            try {
+              console.log('🔍 Getting real listing ID from transaction:', marketHash)
+              
+              // Try to get listing ID from transaction logs
+              const { listingId, collectionId, type } = await getListingIdFromTransaction(marketHash)
+              
+              let realListingId = listingId || collectionId
+              
+              // Fallback: Get latest listing ID for user if transaction parsing fails
+              if (!realListingId) {
+                console.log('⚠️ Could not get listing ID from transaction, trying user-specific fallback...')
+                realListingId = await getLatestListingIdForUser(address || '')
+              }
+              
+              // Final fallback: Get absolute latest listing ID
+              if (!realListingId) {
+                console.log('⚠️ Could not find user-specific listing, trying absolute latest fallback...')
+                const { getAbsoluteLatestListingId } = await import('@/utils/getListingIdFromTransaction')
+                realListingId = await getAbsoluteLatestListingId()
+              }
+              
+              if (!realListingId) {
+                console.error('❌ Could not determine real listing ID using any method, skipping database sync')
+                return // Don't sync with transaction hash
+              }
+              
+              console.log('✅ Using listing ID for database sync:', realListingId)
+              
+              const listingData = prepareListingData(
+                realListingId, // Use real listing ID instead of transaction hash
+                selectedNFT.contractAddress,
+                selectedNFT.tokenId,
+                address || '',
+                sellPrice,
+                marketHash,
+                {
+                  name: selectedNFT.name,
+                  description: sellDescription,
+                  category: sellCategory,
+                  image: selectedNFT.image || '/placeholder-nft.jpg',
+                  attributes: selectedNFT.attributes || [],
+                  rarity: selectedNFT.rarity || 'Common',
+                  collectionName: selectedNFT.collectionName
+                }
+              )
+              
+              // Sync to database
+              const success = await syncListingToDatabase(listingData)
+              if (success) {
+                console.log('✅ Successfully synced listing to database with real ID:', realListingId)
+              } else {
+                console.error('❌ Failed to sync listing to database')
+              }
+              
+            } catch (error) {
+              console.error('❌ Error during database sync with real listing ID:', error)
+            }
+          }
+          
+          // Execute async sync
+          syncWithRealListingId()
+        } else if (currentTransactionType === 'collection') {
+          // ✅ NEW: Handle collection listing success
+          const syncCollectionToDatabase = async () => {
+            try {
+              console.log('🔍 Syncing collection to database from transaction:', marketHash)
+              
+              // Get collection data from window storage
+              const collectionData = (window as any).pendingCollectionData as CollectionSellData
+              if (!collectionData) {
+                console.error('❌ No pending collection data found')
+                return
+              }
+              
+              // Get real listing/collection ID from transaction
+              const { listingId, collectionId } = await getListingIdFromTransaction(marketHash)
+              const realId = collectionId || listingId
+              
+              if (!realId) {
+                console.error('❌ Could not get collection ID from transaction')
+                return
+              }
+              
+              // Create collection in database
+              const collectionPayload = {
+                collection_id: realId,
+                name: collectionData.collectionName,
+                description: collectionData.collectionDescription || '',
+                cover_image: collectionData.collectionImage || '',
+                creator_address: address || '',
+                contract_address: collectionData.nftContract,
+                is_bundle: collectionData.listingType === 'bundle',
+                bundle_price: collectionData.bundlePrice ? parseFloat(collectionData.bundlePrice) : undefined,
+                listing_type: collectionData.listingType === 'bundle' ? 1 : collectionData.listingType === 'same-price' ? 2 : 0,
+                tx_hash: marketHash,
+                total_items: collectionData.tokenIds.length,
+                items: collectionData.tokenIds.map((tokenId, index) => ({
+                  listing_id: `${realId}-${tokenId}`,
+                  nft_contract: collectionData.nftContract,
+                  token_id: tokenId,
+                  price: collectionData.listingType === 'bundle' ? 0 : 
+                        collectionData.listingType === 'same-price' ? parseFloat(collectionData.samePricePerItem || '0') :
+                        parseFloat(collectionData.individualPrices?.[index] || '0')
+                }))
+              }
+              
+              const response = await fetch('/api/collections', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(collectionPayload)
+              })
+              
+              if (response.ok) {
+                console.log('✅ Collection synced to database successfully')
+                // Clear pending data
+                delete (window as any).pendingCollectionData
+              } else {
+                console.error('❌ Failed to sync collection to database')
+              }
+              
+            } catch (error) {
+              console.error('❌ Error syncing collection to database:', error)
+            }
+          }
+          
+          // Execute async sync
+          syncCollectionToDatabase()
         }
 
         const isCollection = currentTransactionType === 'collection'
@@ -468,6 +605,8 @@ export default function ProfilePage() {
         description: "Please confirm the listing transaction in your wallet...",
       })
 
+      // Store collection data for later database sync
+      ;(window as any).pendingCollectionData = data
       setCurrentTransactionType('collection')
 
       if (data.listingType === 'bundle') {
@@ -724,6 +863,8 @@ export default function ProfilePage() {
   const handleCloseSingleNFTDialog = () => {
     setSelectedNFT(null)
     setSellPrice('')
+    setSellDescription('')
+    setSellCategory('')
     setTransactionStatus('idle')
     setLastTransactionHash('')
     setCurrentTransactionType(null)
@@ -952,6 +1093,8 @@ export default function ProfilePage() {
     setSelectedNFT(nft)
     setSellPrice("")
     setSellType("fixed")
+    setSellDescription("")
+    setSellCategory("")
     setTransactionStatus('idle')
     setLastTransactionHash('')
     setCurrentTransactionType(null)
@@ -1049,22 +1192,58 @@ export default function ProfilePage() {
                   onChange={(e) => setSellPrice(e.target.value)}
                   disabled={isCurrentNFTLoading}
                 />
-              </div>                <div>
-                  <Label htmlFor="sell-type">Sale Type</Label>
-                  <Select
-                    value={sellType}
-                    onValueChange={setSellType}
-                    disabled={isCurrentNFTLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">Fixed Price</SelectItem>
-                      <SelectItem value="auction">Auction</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description (Optional)</Label>
+                <Input
+                  id="description"
+                  placeholder="Add a description for your NFT listing..."
+                  value={sellDescription}
+                  onChange={(e) => setSellDescription(e.target.value)}
+                  disabled={isCurrentNFTLoading}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Select
+                  value={sellCategory}
+                  onValueChange={setSellCategory}
+                  disabled={isCurrentNFTLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="art">Art</SelectItem>
+                    <SelectItem value="collectibles">Collectibles</SelectItem>
+                    <SelectItem value="gaming">Gaming</SelectItem>
+                    <SelectItem value="photography">Photography</SelectItem>
+                    <SelectItem value="music">Music</SelectItem>
+                    <SelectItem value="sports">Sports</SelectItem>
+                    <SelectItem value="virtual-worlds">Virtual Worlds</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="sell-type">Sale Type</Label>
+                <Select
+                  value={sellType}
+                  onValueChange={setSellType}
+                  disabled={isCurrentNFTLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">Fixed Price</SelectItem>
+                    <SelectItem value="auction">Auction</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
                 
 
@@ -1443,6 +1622,8 @@ export default function ProfilePage() {
               </p>
             </div>
           </TabsContent>
+
+
 
           <TabsContent value="activity">
             <div className="text-center py-12">

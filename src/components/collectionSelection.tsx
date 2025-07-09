@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { X, Package, AlertCircle, Loader2 } from "lucide-react"
+import { X, Package, AlertCircle, Loader2, Upload, ImageIcon } from "lucide-react"
 import { ProcessedNFT } from "@/interfaces/nft"
 import Image from "next/image"
 
@@ -28,6 +28,8 @@ export interface CollectionSellData {
   individualPrices?: string[]
   samePricePerItem?: string
   collectionName: string
+  collectionImage?: string
+  collectionDescription?: string
 }
 
 export default function CollectionSelector({ nfts, onClose, onSell, isLoading }: CollectionSelectorProps) {
@@ -37,6 +39,9 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
   const [individualPrices, setIndividualPrices] = useState<{[key: string]: string}>({})
   const [samePricePerItem, setSamePricePerItem] = useState("")
   const [collectionName, setCollectionName] = useState("")
+  const [collectionImage, setCollectionImage] = useState("")
+  const [collectionDescription, setCollectionDescription] = useState("")
+  const [uploading, setUploading] = useState(false)
 
   // Group NFTs by contract address
   const nftsByContract = nfts.reduce((acc, nft) => {
@@ -91,6 +96,33 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
     }))
   }
 
+  // Handle image upload
+  const handleImageUpload = async (file: File) => {
+    try {
+      setUploading(true)
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setCollectionImage(data.url)
+      } else {
+        throw new Error('Upload failed')
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      alert('Failed to upload image')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleSell = () => {
     if (!isValidSelection || !collectionName.trim()) return
 
@@ -98,7 +130,9 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
       nftContract: selectedNFTs[0].contractAddress,
       tokenIds: selectedNFTs.map(nft => nft.tokenId),
       listingType,
-      collectionName: collectionName.trim()
+      collectionName: collectionName.trim(),
+      collectionImage: collectionImage || undefined,
+      collectionDescription: collectionDescription.trim() || undefined
     }
 
     if (listingType === 'bundle') {
@@ -168,6 +202,67 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                     value={collectionName}
                     onChange={(e) => setCollectionName(e.target.value)}
                   />
+                </div>
+
+                <div>
+                  <Label htmlFor="collection-description">Collection Description</Label>
+                  <Input
+                    id="collection-description"
+                    placeholder="Describe your collection (optional)"
+                    value={collectionDescription}
+                    onChange={(e) => setCollectionDescription(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label>Collection Cover Image</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center flex-1">
+                      {collectionImage ? (
+                        <div className="relative h-32 mb-2">
+                          <Image
+                            src={collectionImage}
+                            alt="Collection cover"
+                            fill
+                            className="object-cover rounded"
+                          />
+                        </div>
+                      ) : (
+                        <ImageIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                      )}
+                      <Button
+                        variant="outline"
+                        disabled={uploading}
+                        onClick={() => document.getElementById('collection-image-upload')?.click()}
+                        className="w-full"
+                      >
+                        {uploading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            {collectionImage ? 'Change Image' : 'Upload Image'}
+                          </>
+                        )}
+                      </Button>
+                      <input
+                        id="collection-image-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) handleImageUpload(file)
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Upload a cover image for your collection. This will be shown in the marketplace.
+                  </p>
                 </div>
 
                 <div>

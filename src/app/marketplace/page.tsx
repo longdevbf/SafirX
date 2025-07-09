@@ -28,6 +28,34 @@ import { useToast } from "@/hooks/use-toast"
 import { useMarketplace } from "@/context/marketplaceContext"
 import { getRosePrice } from "@/services/rose_usd"
 
+// Helper function for robust ID extraction
+const getListingId = (nft: ProcessedNFT): string => {
+  // Priority: listingId > collectionId > id
+  const id = nft?.listingId || nft?.collectionId || nft?.id || ''
+  
+  if (!id || id === 'undefined' || id === 'null' || !nft) {
+    console.error('❌ Invalid NFT ID:', nft)
+    throw new Error(`Invalid listing ID: ${id}`)
+  }
+  
+  return id
+}
+
+// Helper function for ID validation
+const validateListingId = (id: string, operation: string): void => {
+  if (!id || id === 'undefined' || id === 'null') {
+    throw new Error(`Invalid listing ID for ${operation}: ${id}`)
+  }
+  
+  // Check if it's a valid numeric ID (1, 2, 3, etc.) or transaction hash
+  const isNumeric = /^\d+$/.test(id)
+  const isTransactionHash = /^0x[a-fA-F0-9]{64}$/.test(id)
+  
+  if (!isNumeric && !isTransactionHash) {
+    throw new Error(`Invalid listing ID format for ${operation}: ${id}`)
+  }
+}
+
 export default function MarketplacePage() {
   const [selectedTab, setSelectedTab] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -44,6 +72,11 @@ export default function MarketplacePage() {
   const [processingNFT, setProcessingNFT] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [rosePrice, setRosePrice] = useState<number | null>(0.05)
+  const [pendingTransaction, setPendingTransaction] = useState<{
+    type: 'buy' | 'update' | 'cancel'
+    nftId: string
+    data?: any
+  } | null>(null)
 
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
@@ -57,7 +90,11 @@ export default function MarketplacePage() {
     collections,
     rarities,
     refetch,
-    total
+    total,
+    likeNFT,
+    updateNFTPrice,
+    cancelNFTListing,
+    buyNFT
   } = useMarketplace() || {}
   
   const {
@@ -123,7 +160,16 @@ export default function MarketplacePage() {
 
   // ✅ FIXED: Define utility functions before using them
   const getNFTId = useCallback((nft: ProcessedNFT) => {
-    return nft.isBundle && nft.collectionId ? nft.collectionId : nft.listingId
+    if (!nft) {
+      console.warn('⚠️ getNFTId called with empty NFT')
+      return ''
+    }
+    try {
+      return getListingId(nft)
+    } catch (error) {
+      console.warn('⚠️ Failed to get NFT ID:', error)
+      return ''
+    }
   }, [])
 
   const isProcessing = useCallback((nft: ProcessedNFT) => {
@@ -250,11 +296,11 @@ export default function MarketplacePage() {
     setSelectedCollectionId(null)
   }, [])
 
-  // ✅ Handle purchase with proper bundle vs single NFT logic
+  // ✅ Handle purchase - only blockchain transaction, database update on confirmation
   const handlePurchase = useCallback(async (nft: ProcessedNFT) => {
     if (!isConnected) {
       toast({
-        title: "Wallet Not Connected",
+        title: "Connect Wallet Required",
         description: "Please connect your wallet to purchase NFTs.",
         variant: "destructive"
       })
@@ -271,20 +317,25 @@ export default function MarketplacePage() {
     }
 
     try {
-      const id = nft.isBundle && nft.collectionId ? nft.collectionId : nft.listingId
-      if (!id) {
-        throw new Error("Invalid listing ID")
-      }
+      const id = getListingId(nft)
+      validateListingId(id, 'purchase')
       
-      console.log('Purchase attempt:', {
-        nftName: nft.name,
+      console.log('🔍 Purchase ID extraction:', {
         isBundle: nft.isBundle,
-        id: id,
-        price: nft.price,
-        seller: nft.seller
+        collectionId: nft.collectionId,
+        listingId: nft.listingId,
+        finalId: id,
+        nftData: nft
       })
       
       setProcessingNFT(id)
+      setPendingTransaction({
+        type: 'buy',
+        nftId: id,
+        data: { buyerAddress: address }
+      })
+      
+      // Only do blockchain transaction, database update will happen on confirmation
       await buyNFTUnified(id, nft.price?.toString() || "0")
       
       toast({
@@ -295,28 +346,51 @@ export default function MarketplacePage() {
       console.error("Purchase error:", error)
       toast({
         title: "Purchase Failed",
-        description: error as string || "Failed to purchase NFT. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to purchase NFT. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
   }, [isConnected, buyNFTUnified, toast])
 
   const handleUpdatePrice = useCallback(async () => {
-    if (!selectedNFT || !newPrice) return
+    if (!selectedNFT || !newPrice) {
+      console.error('❌ Missing selectedNFT or newPrice:', { selectedNFT, newPrice })
+      return
+    }
+
+    console.log('🔄 Starting price update for NFT:', selectedNFT)
 
     try {
-      const id = selectedNFT.isBundle && selectedNFT.collectionId ? selectedNFT.collectionId : selectedNFT.listingId
-      if (!id) {
-        throw new Error("Invalid listing ID")
-      }
+      const id = getListingId(selectedNFT)
+      validateListingId(id, 'price update')
+      
+      console.log('✅ Valid listing ID for price update:', id)
       
       setProcessingNFT(id)
+      setPendingTransaction({
+        type: 'update',
+        nftId: id,
+        data: { newPrice }
+      })
       
+      console.log('💰 Price conversion:', {
+        originalPrice: newPrice,
+        priceInROSE: newPrice,
+        selectedNFT: selectedNFT
+      })
+      
+      // Only do blockchain transaction, database update will happen on confirmation
       if (selectedNFT.isBundle && selectedNFT.collectionId) {
+        console.log('📦 Updating bundle price...')
         await updateBundlePrice(selectedNFT.collectionId, newPrice)
       } else if (selectedNFT.listingId) {
+        console.log('🎯 Updating single NFT price...')
         await updatePrice(selectedNFT.listingId, newPrice)
+      } else {
+        console.log('🔄 Using unified update with ID:', id)
+        await updatePrice(id, newPrice)
       }
       
       toast({
@@ -324,23 +398,39 @@ export default function MarketplacePage() {
         description: "Please confirm the transaction in your wallet...",
       })
     } catch (error) {
+      console.error("Price update error:", error)
       toast({
         title: "Price Update Failed",
-        description: error as string || "Failed to update price. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update price. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
   }, [selectedNFT, newPrice, updatePrice, updateBundlePrice, toast])
 
   const handleCancelListing = useCallback(async (nft: ProcessedNFT) => {
+    if (!nft) {
+      console.error('❌ Missing NFT for cancellation:', nft)
+      return
+    }
+
+    console.log('🔄 Starting cancellation for NFT:', nft)
+
     try {
-      const id = nft.isBundle && nft.collectionId ? nft.collectionId : nft.listingId
-      if (!id) {
-        throw new Error("Invalid listing ID")
-      }
+      const id = getListingId(nft)
+      validateListingId(id, 'cancel listing')
+      
+      console.log('✅ Valid listing ID for cancellation:', id)
       
       setProcessingNFT(id)
+      setPendingTransaction({
+        type: 'cancel',
+        nftId: id
+      })
+      
+      // Only do blockchain transaction, database update will happen on confirmation
+      console.log('🔄 Calling cancelListingUnified with ID:', id)
       await cancelListingUnified(id)
       
       toast({
@@ -348,29 +438,79 @@ export default function MarketplacePage() {
         description: "Please confirm the transaction in your wallet...",
       })
     } catch (error) {
+      console.error("Cancel listing error:", error)
       toast({
         title: "Cancellation Failed",
-        description: error as string || "Failed to cancel listing. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to cancel listing. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
   }, [cancelListingUnified, toast])
 
   // ✅ Handle successful transactions
   useEffect(() => {
-    if (isConfirmed && hash) {
-      toast({
-        title: "Transaction Successful!",
-        description: "Your transaction has been confirmed.",
-      })
-      setTimeout(() => refetch && refetch(), 3000)
-      setSelectedNFT(null)
-      setNewPrice("")
-      setIsEditDialogOpen(false)
+    if (isConfirmed && hash && pendingTransaction) {
+      const handleDatabaseUpdate = async () => {
+        try {
+          console.log('🔄 Processing database update:', pendingTransaction)
+          
+          switch (pendingTransaction.type) {
+            case 'buy':
+              if (buyNFT && pendingTransaction.data?.buyerAddress) {
+                console.log('💰 Buying NFT:', pendingTransaction.nftId, 'for', pendingTransaction.data.buyerAddress)
+                await buyNFT(pendingTransaction.nftId, pendingTransaction.data.buyerAddress)
+              }
+              toast({
+                title: "Purchase Successful!",
+                description: "NFT has been purchased successfully.",
+              })
+              break
+              
+            case 'update':
+              if (updateNFTPrice && pendingTransaction.data?.newPrice) {
+                console.log('💲 Updating price:', pendingTransaction.nftId, 'to', pendingTransaction.data.newPrice)
+                await updateNFTPrice(pendingTransaction.nftId, pendingTransaction.data.newPrice)
+              }
+              toast({
+                title: "Price Updated Successfully!",
+                description: "NFT price has been updated.",
+              })
+              setSelectedNFT(null)
+              setNewPrice("")
+              setIsEditDialogOpen(false)
+              break
+              
+            case 'cancel':
+              if (cancelNFTListing) {
+                console.log('❌ Cancelling listing:', pendingTransaction.nftId)
+                await cancelNFTListing(pendingTransaction.nftId)
+              }
+              toast({
+                title: "Listing Cancelled Successfully!",
+                description: "NFT listing has been cancelled.",
+              })
+              break
+          }
+          
+          // Refresh marketplace data
+          setTimeout(() => refetch && refetch(), 1000)
+        } catch (error) {
+          console.error('❌ Database update error:', error)
+          toast({
+            title: "Database Update Failed",
+            description: `Transaction succeeded but database update failed: ${error}`,
+            variant: "destructive"
+          })
+        }
+      }
+      
+      handleDatabaseUpdate()
+      setPendingTransaction(null)
       setProcessingNFT(null)
     }
-  }, [isConfirmed, hash, refetch, toast])
+  }, [isConfirmed, hash, pendingTransaction, buyNFT, updateNFTPrice, cancelNFTListing, refetch, toast])
 
   // ✅ Handle transaction errors
   useEffect(() => {
@@ -381,6 +521,7 @@ export default function MarketplacePage() {
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
   }, [marketError, toast])
 
@@ -825,24 +966,7 @@ export default function MarketplacePage() {
     )
   }
 
-  // ✅ Main Marketplace View
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-            <p className="text-muted-foreground mb-4">
-              Please connect your wallet to view the marketplace.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Connect Wallet
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // ✅ Main Marketplace View - No wallet connection required for viewing
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
@@ -1159,6 +1283,14 @@ export default function MarketplacePage() {
                                   variant="outline"
                                   className="flex-1"
                                   onClick={() => {
+                                    console.log('🔍 Bundle Edit Price button clicked for NFT:', {
+                                      nft,
+                                      price: nft.price,
+                                      listingId: nft.listingId,
+                                      id: nft.id,
+                                      isBundle: nft.isBundle,
+                                      collectionId: nft.collectionId
+                                    })
                                     setSelectedNFT(nft)
                                     setNewPrice(nft.price?.toString() || "")
                                     setIsEditDialogOpen(true)
@@ -1191,6 +1323,11 @@ export default function MarketplacePage() {
                                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                       Processing...
                                     </>
+                                  ) : !isConnected ? (
+                                    <>
+                                      <ShoppingCart className="w-4 h-4 mr-2" />
+                                      Connect Wallet to Buy
+                                    </>
                                   ) : (
                                     <>
                                       <ShoppingCart className="w-4 h-4 mr-2" />
@@ -1213,6 +1350,14 @@ export default function MarketplacePage() {
                                 size="sm"
                                 className="flex-1"
                                 onClick={() => {
+                                  console.log('🔍 Edit Price button clicked for NFT:', {
+                                    nft,
+                                    price: nft.price,
+                                    listingId: nft.listingId,
+                                    id: nft.id,
+                                    isBundle: nft.isBundle,
+                                    collectionId: nft.collectionId
+                                  })
                                   setSelectedNFT(nft)
                                   setNewPrice(nft.price?.toString() || "")
                                   setIsEditDialogOpen(true)
@@ -1244,6 +1389,11 @@ export default function MarketplacePage() {
                                 <>
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                   Processing...
+                                </>
+                              ) : !isConnected ? (
+                                <>
+                                  <ShoppingCart className="w-4 h-4 mr-2" />
+                                  Connect Wallet to Buy
                                 </>
                               ) : (
                                 <>
@@ -1286,7 +1436,15 @@ export default function MarketplacePage() {
                   Cancel
                 </Button>
                 <Button 
-                  onClick={handleUpdatePrice}
+                  onClick={() => {
+                    console.log('🔍 Update Price button clicked:', {
+                      selectedNFT,
+                      newPrice,
+                      processingNFT,
+                      getNFTId: selectedNFT ? getNFTId(selectedNFT) : 'no-selected-nft'
+                    })
+                    handleUpdatePrice()
+                  }}
                   disabled={processingNFT === getNFTId(selectedNFT || {} as ProcessedNFT) || !newPrice}
                 >
                   {processingNFT === getNFTId(selectedNFT || {} as ProcessedNFT) ? (

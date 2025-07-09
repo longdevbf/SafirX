@@ -36,12 +36,12 @@ import {
 import { useMarketplace } from "@/context/marketplaceContext"
 export default function Header() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { loading: isLoading, nfts } = useMarketplace()
+  //const { loading: isLoading, nfts } = useMarketplace()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { isConnected, address, disconnect } = useWallet()
   const { user, loading } = useUserProfile()
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { loading: isLoadingAuctions } = useAuction()
+ // const { loading: isLoadingAuctions } = useAuction()
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`

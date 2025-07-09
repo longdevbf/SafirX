@@ -61,6 +61,7 @@ import { readContract } from "wagmi/actions"
 import { ERC721_ABI } from "@/abis/MarketABI"
 import { config } from "@/components/config/wagmiConfig"
 import { Checkbox } from "@/components/ui/checkbox"
+import { syncListingToDatabase, syncAuctionToDatabase, prepareListingData, prepareAuctionData } from "@/utils/syncToDatabase"
 interface UserProfile {
   name: string
   description: string
@@ -77,6 +78,8 @@ export default function ProfilePage() {
   const [selectedNFT, setSelectedNFT] = useState<ProcessedNFT | null>(null)
   const [sellPrice, setSellPrice] = useState("")
   const [sellType, setSellType] = useState("fixed")
+  const [sellDescription, setSellDescription] = useState("")
+  const [sellCategory, setSellCategory] = useState("")
   const [showCollectionSelector, setShowCollectionSelector] = useState(false)
   const [isListingNFT, setIsListingNFT] = useState(false)
   const [isCollectionListing, setIsCollectionListing] = useState(false)
@@ -134,7 +137,7 @@ export default function ProfilePage() {
     isConfirming: isAuctionConfirming,
     isConfirmed: isAuctionConfirmed,
   } = useSealedBidAuction()
-  console.log(auctionError)
+  
   // ✅ NEW: Auction approval hook
   const {
     isApproved: isAuctionApproved,
@@ -198,6 +201,30 @@ export default function ProfilePage() {
         // ✅ FIXED: Track which NFT was successfully listed
         if (currentTransactionType === 'single' && selectedNFT) {
           setSuccessfulNFTId(`${selectedNFT.contractAddress}-${selectedNFT.tokenId}`)
+          
+          // ✅ NEW: Sync single NFT listing to database
+          const listingData = prepareListingData(
+            marketHash, // Using transaction hash as listing ID for now
+            selectedNFT.contractAddress,
+            selectedNFT.tokenId,
+            address || '',
+            sellPrice,
+            marketHash,
+            {
+              name: selectedNFT.name,
+              description: sellDescription,
+              category: sellCategory,
+              image: selectedNFT.image || '/placeholder-nft.jpg',
+              attributes: selectedNFT.attributes || [],
+              rarity: selectedNFT.rarity || 'Common',
+              collectionName: selectedNFT.collectionName
+            }
+          )
+          
+          // Sync to database asynchronously
+          syncListingToDatabase(listingData).catch(error => {
+            console.error('Failed to sync listing to database:', error)
+          })
         }
 
         const isCollection = currentTransactionType === 'collection'
@@ -724,6 +751,8 @@ export default function ProfilePage() {
   const handleCloseSingleNFTDialog = () => {
     setSelectedNFT(null)
     setSellPrice('')
+    setSellDescription('')
+    setSellCategory('')
     setTransactionStatus('idle')
     setLastTransactionHash('')
     setCurrentTransactionType(null)
@@ -952,6 +981,8 @@ export default function ProfilePage() {
     setSelectedNFT(nft)
     setSellPrice("")
     setSellType("fixed")
+    setSellDescription("")
+    setSellCategory("")
     setTransactionStatus('idle')
     setLastTransactionHash('')
     setCurrentTransactionType(null)
@@ -1049,22 +1080,58 @@ export default function ProfilePage() {
                   onChange={(e) => setSellPrice(e.target.value)}
                   disabled={isCurrentNFTLoading}
                 />
-              </div>                <div>
-                  <Label htmlFor="sell-type">Sale Type</Label>
-                  <Select
-                    value={sellType}
-                    onValueChange={setSellType}
-                    disabled={isCurrentNFTLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">Fixed Price</SelectItem>
-                      <SelectItem value="auction">Auction</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description (Optional)</Label>
+                <Input
+                  id="description"
+                  placeholder="Add a description for your NFT listing..."
+                  value={sellDescription}
+                  onChange={(e) => setSellDescription(e.target.value)}
+                  disabled={isCurrentNFTLoading}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Select
+                  value={sellCategory}
+                  onValueChange={setSellCategory}
+                  disabled={isCurrentNFTLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="art">Art</SelectItem>
+                    <SelectItem value="collectibles">Collectibles</SelectItem>
+                    <SelectItem value="gaming">Gaming</SelectItem>
+                    <SelectItem value="photography">Photography</SelectItem>
+                    <SelectItem value="music">Music</SelectItem>
+                    <SelectItem value="sports">Sports</SelectItem>
+                    <SelectItem value="virtual-worlds">Virtual Worlds</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="sell-type">Sale Type</Label>
+                <Select
+                  value={sellType}
+                  onValueChange={setSellType}
+                  disabled={isCurrentNFTLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">Fixed Price</SelectItem>
+                    <SelectItem value="auction">Auction</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
                 
 

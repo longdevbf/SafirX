@@ -5,7 +5,7 @@ import { SEALED_BID_AUCTION_CONFIG } from '@/abis/AuctionSealedBid'
 
 export function useAuctionApproval(nftContract: string, userAddress?: string) {
   const { writeContract, data: hash, error, isPending } = useWriteContract()
-  console.log(error)
+  
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
   })
@@ -44,6 +44,7 @@ export function useAuctionApproval(nftContract: string, userAddress?: string) {
     hash,
     isPending,
     isConfirming,
-    isConfirmed
+    isConfirmed,
+    error
   }
 }

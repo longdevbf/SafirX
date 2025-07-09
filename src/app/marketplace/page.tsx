@@ -57,7 +57,11 @@ export default function MarketplacePage() {
     collections,
     rarities,
     refetch,
-    total
+    total,
+    likeNFT,
+    updateNFTPrice,
+    cancelNFTListing,
+    buyNFT
   } = useMarketplace() || {}
   
   const {
@@ -250,11 +254,11 @@ export default function MarketplacePage() {
     setSelectedCollectionId(null)
   }, [])
 
-  // ✅ Handle purchase with proper bundle vs single NFT logic
+  // ✅ Handle purchase with database integration
   const handlePurchase = useCallback(async (nft: ProcessedNFT) => {
     if (!isConnected) {
       toast({
-        title: "Wallet Not Connected",
+        title: "Connect Wallet Required",
         description: "Please connect your wallet to purchase NFTs.",
         variant: "destructive"
       })
@@ -276,20 +280,19 @@ export default function MarketplacePage() {
         throw new Error("Invalid listing ID")
       }
       
-      console.log('Purchase attempt:', {
-        nftName: nft.name,
-        isBundle: nft.isBundle,
-        id: id,
-        price: nft.price,
-        seller: nft.seller
-      })
-      
       setProcessingNFT(id)
+      
+      // First do blockchain transaction
       await buyNFTUnified(id, nft.price?.toString() || "0")
       
+      // Then update database
+      if (buyNFT) {
+        await buyNFT(id, address || "")
+      }
+      
       toast({
-        title: "Purchase Submitted",
-        description: "Please confirm the transaction in your wallet...",
+        title: "Purchase Successful!",
+        description: "NFT has been purchased successfully.",
       })
     } catch (error) {
       console.error("Purchase error:", error)
@@ -300,7 +303,7 @@ export default function MarketplacePage() {
       })
       setProcessingNFT(null)
     }
-  }, [isConnected, buyNFTUnified, toast])
+  }, [isConnected, buyNFTUnified, buyNFT, address, toast])
 
   const handleUpdatePrice = useCallback(async () => {
     if (!selectedNFT || !newPrice) return
@@ -313,16 +316,26 @@ export default function MarketplacePage() {
       
       setProcessingNFT(id)
       
+      // First do blockchain transaction
       if (selectedNFT.isBundle && selectedNFT.collectionId) {
         await updateBundlePrice(selectedNFT.collectionId, newPrice)
       } else if (selectedNFT.listingId) {
         await updatePrice(selectedNFT.listingId, newPrice)
       }
       
+      // Then update database
+      if (updateNFTPrice) {
+        await updateNFTPrice(id, newPrice)
+      }
+      
       toast({
-        title: "Price Update Submitted",
-        description: "Please confirm the transaction in your wallet...",
+        title: "Price Updated Successfully!",
+        description: "NFT price has been updated.",
       })
+      
+      setSelectedNFT(null)
+      setNewPrice("")
+      setIsEditDialogOpen(false)
     } catch (error) {
       toast({
         title: "Price Update Failed",
@@ -331,7 +344,7 @@ export default function MarketplacePage() {
       })
       setProcessingNFT(null)
     }
-  }, [selectedNFT, newPrice, updatePrice, updateBundlePrice, toast])
+  }, [selectedNFT, newPrice, updatePrice, updateBundlePrice, updateNFTPrice, toast])
 
   const handleCancelListing = useCallback(async (nft: ProcessedNFT) => {
     try {
@@ -341,11 +354,18 @@ export default function MarketplacePage() {
       }
       
       setProcessingNFT(id)
+      
+      // First do blockchain transaction
       await cancelListingUnified(id)
       
+      // Then update database
+      if (cancelNFTListing) {
+        await cancelNFTListing(id)
+      }
+      
       toast({
-        title: "Cancellation Submitted",
-        description: "Please confirm the transaction in your wallet...",
+        title: "Listing Cancelled Successfully!",
+        description: "NFT listing has been cancelled.",
       })
     } catch (error) {
       toast({
@@ -355,7 +375,7 @@ export default function MarketplacePage() {
       })
       setProcessingNFT(null)
     }
-  }, [cancelListingUnified, toast])
+  }, [cancelListingUnified, cancelNFTListing, toast])
 
   // ✅ Handle successful transactions
   useEffect(() => {
@@ -825,24 +845,7 @@ export default function MarketplacePage() {
     )
   }
 
-  // ✅ Main Marketplace View
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-            <p className="text-muted-foreground mb-4">
-              Please connect your wallet to view the marketplace.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Connect Wallet
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // ✅ Main Marketplace View - No wallet connection required for viewing
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
@@ -1191,6 +1194,11 @@ export default function MarketplacePage() {
                                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                       Processing...
                                     </>
+                                  ) : !isConnected ? (
+                                    <>
+                                      <ShoppingCart className="w-4 h-4 mr-2" />
+                                      Connect Wallet to Buy
+                                    </>
                                   ) : (
                                     <>
                                       <ShoppingCart className="w-4 h-4 mr-2" />
@@ -1244,6 +1252,11 @@ export default function MarketplacePage() {
                                 <>
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                   Processing...
+                                </>
+                              ) : !isConnected ? (
+                                <>
+                                  <ShoppingCart className="w-4 h-4 mr-2" />
+                                  Connect Wallet to Buy
                                 </>
                               ) : (
                                 <>

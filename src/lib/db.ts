@@ -411,6 +411,36 @@ export const listingQueries = {
       console.error('Error getting collections summary:', error)
       throw error
     }
+  },
+
+  // Get listing by ID
+  async getListingById(listingId: string) {
+    try {
+      const result = await sql`
+        SELECT * FROM listings 
+        WHERE listing_id = ${listingId}
+      `
+      return result[0] || null
+    } catch (error) {
+      console.error('Error getting listing by ID:', error)
+      throw error
+    }
+  },
+
+  // Update listing price
+  async updateListingPrice(listingId: string, newPrice: string) {
+    try {
+      const result = await sql`
+        UPDATE listings 
+        SET price = ${newPrice}, updated_at = CURRENT_TIMESTAMP
+        WHERE listing_id = ${listingId}
+        RETURNING *
+      `
+      return result[0] || null
+    } catch (error) {
+      console.error('Error updating listing price:', error)
+      throw error
+    }
   }
 }
 

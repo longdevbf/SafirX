@@ -19,8 +19,29 @@ interface MarketplacePagination {
   hasPrev: boolean
 }
 
+interface DatabaseListing {
+  listing_id: string
+  nft_contract: string
+  token_id: string
+  seller: string
+  price: string
+  collection_name?: string
+  name: string
+  description?: string
+  category?: string
+  image: string
+  attributes?: string
+  rarity?: string
+  is_active: boolean
+  is_bundle: boolean
+  bundle_token_ids?: string
+  collection_image?: string
+  views_count?: number
+  likes_count?: number
+}
+
 interface MarketplaceResponse {
-  listings: any[]
+  listings: DatabaseListing[]
   pagination: MarketplacePagination
 }
 
@@ -111,7 +132,7 @@ export function useMarketplaceDB() {
       setPagination(data.pagination)
       
       // Extract unique rarities
-      const uniqueRarities = Array.from(new Set(processedNFTs.map(nft => nft.rarity).filter(Boolean)))
+      const uniqueRarities = Array.from(new Set(processedNFTs.map(nft => nft.rarity).filter((rarity): rarity is string => Boolean(rarity))))
       setRarities(uniqueRarities)
 
     } catch (err) {
@@ -178,6 +199,85 @@ export function useMarketplaceDB() {
     }
   }, [])
 
+  // Update NFT price
+  const updateNFTPrice = useCallback(async (listingId: string, newPrice: string) => {
+    try {
+      const response = await fetch(`/api/listings/${listingId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ price: newPrice })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update price')
+      }
+
+      const data = await response.json()
+      
+      // Update local state
+      setNfts(prev => prev.map(nft => 
+        nft.listingId === listingId 
+          ? { ...nft, price: newPrice }
+          : nft
+      ))
+
+      return data.listing
+    } catch (err) {
+      console.error('Error updating NFT price:', err)
+      throw err
+    }
+  }, [])
+
+  // Cancel NFT listing
+  const cancelNFTListing = useCallback(async (listingId: string) => {
+    try {
+      const response = await fetch(`/api/listings/${listingId}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to cancel listing')
+      }
+
+      // Remove from local state
+      setNfts(prev => prev.filter(nft => nft.listingId !== listingId))
+
+      return true
+    } catch (err) {
+      console.error('Error cancelling NFT listing:', err)
+      throw err
+    }
+  }, [])
+
+  // Buy NFT
+  const buyNFT = useCallback(async (listingId: string, buyerAddress: string) => {
+    try {
+      const response = await fetch(`/api/listings/${listingId}/buy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ buyer: buyerAddress })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to buy NFT')
+      }
+
+      const data = await response.json()
+      
+      // Remove from local state (bought NFTs are no longer active)
+      setNfts(prev => prev.filter(nft => nft.listingId !== listingId))
+
+      return data.listing
+    } catch (err) {
+      console.error('Error buying NFT:', err)
+      throw err
+    }
+  }, [])
+
   // Initial load
   useEffect(() => {
     refetch()
@@ -194,6 +294,9 @@ export function useMarketplaceDB() {
     loadMoreNFTs,
     refetch,
     likeNFT,
+    updateNFTPrice,
+    cancelNFTListing,
+    buyNFT,
     hasMore: pagination.hasNext,
     total: pagination.totalCount
   }

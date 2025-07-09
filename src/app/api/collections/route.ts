@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listingQueries } from '@/lib/db'
 
 // GET /api/collections - Get collections summary
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const collections = await listingQueries.getCollectionsSummary()
 

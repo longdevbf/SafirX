@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { ProcessedNFT } from '@/interfaces/nft'
+import { requestSingleton } from '@/lib/request-singleton'
 
 interface CachedMarketplaceState {
   nfts: ProcessedNFT[]
@@ -28,9 +29,6 @@ export function useCachedMarketplace(options: CachedMarketplaceOptions = {}) {
     rarities: [],
     total: 0
   })
-  
-  // ✅ Track loading để tránh concurrent requests
-  const [isCurrentlyFetching, setIsCurrentlyFetching] = useState(false)
 
   // ✅ Memoize options để tránh infinite loop
   const stableOptions = useMemo(() => ({
@@ -49,58 +47,66 @@ export function useCachedMarketplace(options: CachedMarketplaceOptions = {}) {
     options.includeAuctions
   ])
 
-  // ✅ Add debouncing để tránh spam requests
+  // ✅ FIXED: Use singleton để prevent duplicate requests hoàn toàn
   const fetchCachedData = useCallback(async (opts: CachedMarketplaceOptions = {}) => {
-    // ✅ Prevent concurrent requests
-    if (isCurrentlyFetching) {
-      console.log('⏳ Request already in progress, skipping...')
-      return
-    }
+    const { limit = 50, offset = 0, collection, seller, search, includeAuctions = false } = opts
+    
+    // Tạo unique key cho request
+    const requestKey = `marketplace-${limit}-${offset}-${collection || ''}-${seller || ''}-${search || ''}-${includeAuctions}`
     
     try {
-      setIsCurrentlyFetching(true)
       setState(prev => ({ ...prev, loading: true, error: null }))
-      
-      // Small delay để avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 50))
 
-      const { limit = 50, offset = 0, collection, seller, search, includeAuctions = false } = opts
-
-      // Fetch listings from cache
-      const listingsParams = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-        ...(collection && { collection }),
-        ...(seller && { seller }),
-        ...(search && { search })
-      })
-
-      const listingsResponse = await fetch(`/api/cache/listings?${listingsParams}`)
-      const listingsData = await listingsResponse.json()
-
-      let allNFTs: ProcessedNFT[] = []
-      
-      if (listingsData.success) {
-        allNFTs = [...listingsData.data]
-      } else {
-        throw new Error(listingsData.error || 'Failed to fetch listings')
-      }
-
-      // Optionally fetch auctions
-      if (includeAuctions) {
-        const auctionsParams = new URLSearchParams({
+      // ✅ Sử dụng singleton để prevent duplicate calls
+      const result = await requestSingleton.request(requestKey, async () => {
+        console.log('🔥 Executing marketplace fetch:', requestKey)
+        
+        // Fetch listings from cache
+        const listingsParams = new URLSearchParams({
           limit: limit.toString(),
           offset: offset.toString(),
-          ...(seller && { seller })
+          ...(collection && { collection }),
+          ...(seller && { seller }),
+          ...(search && { search })
         })
 
-        const auctionsResponse = await fetch(`/api/cache/auctions?${auctionsParams}`)
-        const auctionsData = await auctionsResponse.json()
+        const listingsResponse = await fetch(`/api/cache/listings?${listingsParams}`)
+        const listingsData = await listingsResponse.json()
 
-        if (auctionsData.success) {
-          allNFTs = [...allNFTs, ...auctionsData.data]
+        let allNFTs: ProcessedNFT[] = []
+        
+        if (listingsData.success) {
+          allNFTs = [...listingsData.data]
+        } else {
+          throw new Error(listingsData.error || 'Failed to fetch listings')
         }
+
+        // Optionally fetch auctions
+        if (includeAuctions) {
+          const auctionsParams = new URLSearchParams({
+            limit: limit.toString(),
+            offset: offset.toString(),
+            ...(seller && { seller })
+          })
+
+          const auctionsResponse = await fetch(`/api/cache/auctions?${auctionsParams}`)
+          const auctionsData = await auctionsResponse.json()
+
+          if (auctionsData.success) {
+            allNFTs = [...allNFTs, ...auctionsData.data]
+          }
+        }
+
+        return allNFTs
+      })
+
+      // Nếu result empty (debounced), không update state
+      if (!result || result.length === 0) {
+        setState(prev => ({ ...prev, loading: false }))
+        return
       }
+
+      const allNFTs = result as ProcessedNFT[]
 
       // Extract collections and rarities
       const collectionsSet = new Set<string>()
@@ -127,10 +133,8 @@ export function useCachedMarketplace(options: CachedMarketplaceOptions = {}) {
         loading: false,
         error: error instanceof Error ? error.message : 'Failed to load marketplace data'
       }))
-    } finally {
-      setIsCurrentlyFetching(false)
     }
-  }, [isCurrentlyFetching])
+  }, [])
 
   const refetch = useCallback(() => {
     fetchCachedData(stableOptions)

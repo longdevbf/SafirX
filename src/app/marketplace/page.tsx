@@ -25,7 +25,8 @@ import { useWallet } from "@/context/walletContext"
 import { useMarketplaceNFTs, useNFTMarket, useCollectionDetail } from "@/hooks/use-market"
 import { ProcessedNFT } from "@/interfaces/nft"
 import { useToast } from "@/hooks/use-toast"
-import { useMarketplace } from "@/context/marketplaceContext"
+// import { useMarketplace } from "@/context/marketplaceContext"
+import { useCachedMarketplace } from "@/hooks/use-cached-marketplace"
 import { getRosePrice } from "@/services/rose_usd"
 
 export default function MarketplacePage() {
@@ -47,18 +48,25 @@ export default function MarketplacePage() {
 
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
+  // ✅ USE DIRECT CACHED HOOK instead of context to avoid infinite loop
   const {
     nfts = [],
     loading = true,
     error = null,
-    pageLoading,
-    loadMoreNFTs,
-    hasMore,
-    collections,
-    rarities,
-    refetch,
-    total
-  } = useMarketplace() || {}
+    collections = [],
+    rarities = [],
+    refetch = () => {},
+    total = 0
+  } = useCachedMarketplace({
+    limit: 50,
+    offset: 0,
+    includeAuctions: true
+  })
+  
+  // ✅ Mock pagination for compatibility
+  const pageLoading = false
+  const loadMoreNFTs = async () => {}
+  const hasMore = false
   
   const {
     buyNFTUnified, updatePrice, updateBundlePrice, 

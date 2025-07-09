@@ -411,7 +411,7 @@ export const ERC721_ABI = [
 ] as const
 
 export const NFT_MARKET_CONFIG = {
-  address: '0xd1DCE6BF2716310753Fc662B044D3233a9EFC3B4' as Address,
+  address: '0xCfB677324e2d9cac13eb6B5Fa969C44F7Ad6417E' as Address,
   abi: NFT_MARKET_ABI,
 }
 

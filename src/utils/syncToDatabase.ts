@@ -211,15 +211,12 @@ export async function updateListingStatus(listingId: string, isActive: boolean):
   try {
     console.log('🔄 Updating listing status:', listingId, 'Active:', isActive)
     
-    const response = await fetch('/api/listings', {
-      method: 'PUT',
+    const response = await fetch(`/api/listings/${listingId}`, {
+      method: isActive ? 'PUT' : 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        listing_id: listingId,
-        is_active: isActive
-      }),
+      body: isActive ? JSON.stringify({ price: '0' }) : undefined // For PUT we need price, for DELETE we don't
     })
 
     if (!response.ok) {
@@ -229,7 +226,7 @@ export async function updateListingStatus(listingId: string, isActive: boolean):
     }
 
     const result = await response.json()
-    console.log('✅ Successfully updated listing status:', result.listing.listing_id)
+    console.log('✅ Successfully updated listing status:', listingId)
     return true
   } catch (error) {
     console.error('❌ Error updating listing status:', error)

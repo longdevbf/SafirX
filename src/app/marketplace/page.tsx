@@ -44,6 +44,11 @@ export default function MarketplacePage() {
   const [processingNFT, setProcessingNFT] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [rosePrice, setRosePrice] = useState<number | null>(0.05)
+  const [pendingTransaction, setPendingTransaction] = useState<{
+    type: 'buy' | 'update' | 'cancel'
+    nftId: string
+    data?: any
+  } | null>(null)
 
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
@@ -254,7 +259,7 @@ export default function MarketplacePage() {
     setSelectedCollectionId(null)
   }, [])
 
-  // ✅ Handle purchase with database integration
+  // ✅ Handle purchase - only blockchain transaction, database update on confirmation
   const handlePurchase = useCallback(async (nft: ProcessedNFT) => {
     if (!isConnected) {
       toast({
@@ -281,18 +286,18 @@ export default function MarketplacePage() {
       }
       
       setProcessingNFT(id)
+      setPendingTransaction({
+        type: 'buy',
+        nftId: id,
+        data: { buyerAddress: address }
+      })
       
-      // First do blockchain transaction
+      // Only do blockchain transaction, database update will happen on confirmation
       await buyNFTUnified(id, nft.price?.toString() || "0")
       
-      // Then update database
-      if (buyNFT) {
-        await buyNFT(id, address || "")
-      }
-      
       toast({
-        title: "Purchase Successful!",
-        description: "NFT has been purchased successfully.",
+        title: "Purchase Submitted",
+        description: "Please confirm the transaction in your wallet...",
       })
     } catch (error) {
       console.error("Purchase error:", error)
@@ -302,8 +307,9 @@ export default function MarketplacePage() {
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
-  }, [isConnected, buyNFTUnified, buyNFT, address, toast])
+  }, [isConnected, buyNFTUnified, toast])
 
   const handleUpdatePrice = useCallback(async () => {
     if (!selectedNFT || !newPrice) return
@@ -315,27 +321,23 @@ export default function MarketplacePage() {
       }
       
       setProcessingNFT(id)
+      setPendingTransaction({
+        type: 'update',
+        nftId: id,
+        data: { newPrice }
+      })
       
-      // First do blockchain transaction
+      // Only do blockchain transaction, database update will happen on confirmation
       if (selectedNFT.isBundle && selectedNFT.collectionId) {
         await updateBundlePrice(selectedNFT.collectionId, newPrice)
       } else if (selectedNFT.listingId) {
         await updatePrice(selectedNFT.listingId, newPrice)
       }
       
-      // Then update database
-      if (updateNFTPrice) {
-        await updateNFTPrice(id, newPrice)
-      }
-      
       toast({
-        title: "Price Updated Successfully!",
-        description: "NFT price has been updated.",
+        title: "Price Update Submitted",
+        description: "Please confirm the transaction in your wallet...",
       })
-      
-      setSelectedNFT(null)
-      setNewPrice("")
-      setIsEditDialogOpen(false)
     } catch (error) {
       toast({
         title: "Price Update Failed",
@@ -343,8 +345,9 @@ export default function MarketplacePage() {
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
-  }, [selectedNFT, newPrice, updatePrice, updateBundlePrice, updateNFTPrice, toast])
+  }, [selectedNFT, newPrice, updatePrice, updateBundlePrice, toast])
 
   const handleCancelListing = useCallback(async (nft: ProcessedNFT) => {
     try {
@@ -354,18 +357,17 @@ export default function MarketplacePage() {
       }
       
       setProcessingNFT(id)
+      setPendingTransaction({
+        type: 'cancel',
+        nftId: id
+      })
       
-      // First do blockchain transaction
+      // Only do blockchain transaction, database update will happen on confirmation
       await cancelListingUnified(id)
       
-      // Then update database
-      if (cancelNFTListing) {
-        await cancelNFTListing(id)
-      }
-      
       toast({
-        title: "Listing Cancelled Successfully!",
-        description: "NFT listing has been cancelled.",
+        title: "Cancellation Submitted",
+        description: "Please confirm the transaction in your wallet...",
       })
     } catch (error) {
       toast({
@@ -374,23 +376,67 @@ export default function MarketplacePage() {
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
-  }, [cancelListingUnified, cancelNFTListing, toast])
+  }, [cancelListingUnified, toast])
 
   // ✅ Handle successful transactions
   useEffect(() => {
-    if (isConfirmed && hash) {
-      toast({
-        title: "Transaction Successful!",
-        description: "Your transaction has been confirmed.",
-      })
-      setTimeout(() => refetch && refetch(), 3000)
-      setSelectedNFT(null)
-      setNewPrice("")
-      setIsEditDialogOpen(false)
+    if (isConfirmed && hash && pendingTransaction) {
+      const handleDatabaseUpdate = async () => {
+        try {
+          switch (pendingTransaction.type) {
+            case 'buy':
+              if (buyNFT && pendingTransaction.data?.buyerAddress) {
+                await buyNFT(pendingTransaction.nftId, pendingTransaction.data.buyerAddress)
+              }
+              toast({
+                title: "Purchase Successful!",
+                description: "NFT has been purchased successfully.",
+              })
+              break
+              
+            case 'update':
+              if (updateNFTPrice && pendingTransaction.data?.newPrice) {
+                await updateNFTPrice(pendingTransaction.nftId, pendingTransaction.data.newPrice)
+              }
+              toast({
+                title: "Price Updated Successfully!",
+                description: "NFT price has been updated.",
+              })
+              setSelectedNFT(null)
+              setNewPrice("")
+              setIsEditDialogOpen(false)
+              break
+              
+            case 'cancel':
+              if (cancelNFTListing) {
+                await cancelNFTListing(pendingTransaction.nftId)
+              }
+              toast({
+                title: "Listing Cancelled Successfully!",
+                description: "NFT listing has been cancelled.",
+              })
+              break
+          }
+          
+          // Refresh marketplace data
+          setTimeout(() => refetch && refetch(), 1000)
+        } catch (error) {
+          console.error('Database update error:', error)
+          toast({
+            title: "Database Update Failed",
+            description: "Transaction succeeded but database update failed. Data will sync eventually.",
+            variant: "destructive"
+          })
+        }
+      }
+      
+      handleDatabaseUpdate()
+      setPendingTransaction(null)
       setProcessingNFT(null)
     }
-  }, [isConfirmed, hash, refetch, toast])
+  }, [isConfirmed, hash, pendingTransaction, buyNFT, updateNFTPrice, cancelNFTListing, refetch, toast])
 
   // ✅ Handle transaction errors
   useEffect(() => {
@@ -401,6 +447,7 @@ export default function MarketplacePage() {
         variant: "destructive"
       })
       setProcessingNFT(null)
+      setPendingTransaction(null)
     }
   }, [marketError, toast])
 

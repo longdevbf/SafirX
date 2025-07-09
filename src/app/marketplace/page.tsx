@@ -43,8 +43,16 @@ const getListingId = (nft: ProcessedNFT): string => {
 
 // Helper function for ID validation
 const validateListingId = (id: string, operation: string): void => {
-  if (!id || id === 'undefined' || id === 'null' || id.length < 10) {
+  if (!id || id === 'undefined' || id === 'null') {
     throw new Error(`Invalid listing ID for ${operation}: ${id}`)
+  }
+  
+  // Check if it's a valid numeric ID (1, 2, 3, etc.) or transaction hash
+  const isNumeric = /^\d+$/.test(id)
+  const isTransactionHash = /^0x[a-fA-F0-9]{64}$/.test(id)
+  
+  if (!isNumeric && !isTransactionHash) {
+    throw new Error(`Invalid listing ID format for ${operation}: ${id}`)
   }
 }
 
@@ -367,20 +375,22 @@ export default function MarketplacePage() {
         data: { newPrice }
       })
       
-      // Convert price to wei
-      const priceInWei = parseEther(newPrice)
-      console.log('💰 Price in wei:', priceInWei.toString())
+      console.log('💰 Price conversion:', {
+        originalPrice: newPrice,
+        priceInROSE: newPrice,
+        selectedNFT: selectedNFT
+      })
       
       // Only do blockchain transaction, database update will happen on confirmation
       if (selectedNFT.isBundle && selectedNFT.collectionId) {
         console.log('📦 Updating bundle price...')
-        await updateBundlePrice(selectedNFT.collectionId, priceInWei.toString())
+        await updateBundlePrice(selectedNFT.collectionId, newPrice)
       } else if (selectedNFT.listingId) {
         console.log('🎯 Updating single NFT price...')
-        await updatePrice(selectedNFT.listingId, priceInWei.toString())
+        await updatePrice(selectedNFT.listingId, newPrice)
       } else {
         console.log('🔄 Using unified update with ID:', id)
-        await updatePrice(id, priceInWei.toString())
+        await updatePrice(id, newPrice)
       }
       
       toast({
@@ -1273,6 +1283,14 @@ export default function MarketplacePage() {
                                   variant="outline"
                                   className="flex-1"
                                   onClick={() => {
+                                    console.log('🔍 Bundle Edit Price button clicked for NFT:', {
+                                      nft,
+                                      price: nft.price,
+                                      listingId: nft.listingId,
+                                      id: nft.id,
+                                      isBundle: nft.isBundle,
+                                      collectionId: nft.collectionId
+                                    })
                                     setSelectedNFT(nft)
                                     setNewPrice(nft.price?.toString() || "")
                                     setIsEditDialogOpen(true)
@@ -1332,6 +1350,14 @@ export default function MarketplacePage() {
                                 size="sm"
                                 className="flex-1"
                                 onClick={() => {
+                                  console.log('🔍 Edit Price button clicked for NFT:', {
+                                    nft,
+                                    price: nft.price,
+                                    listingId: nft.listingId,
+                                    id: nft.id,
+                                    isBundle: nft.isBundle,
+                                    collectionId: nft.collectionId
+                                  })
                                   setSelectedNFT(nft)
                                   setNewPrice(nft.price?.toString() || "")
                                   setIsEditDialogOpen(true)
@@ -1410,7 +1436,15 @@ export default function MarketplacePage() {
                   Cancel
                 </Button>
                 <Button 
-                  onClick={handleUpdatePrice}
+                  onClick={() => {
+                    console.log('🔍 Update Price button clicked:', {
+                      selectedNFT,
+                      newPrice,
+                      processingNFT,
+                      getNFTId: selectedNFT ? getNFTId(selectedNFT) : 'no-selected-nft'
+                    })
+                    handleUpdatePrice()
+                  }}
                   disabled={processingNFT === getNFTId(selectedNFT || {} as ProcessedNFT) || !newPrice}
                 >
                   {processingNFT === getNFTId(selectedNFT || {} as ProcessedNFT) ? (

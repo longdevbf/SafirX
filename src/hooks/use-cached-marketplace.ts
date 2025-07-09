@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { ProcessedNFT } from '@/interfaces/nft'
 
 interface CachedMarketplaceState {
@@ -28,10 +28,41 @@ export function useCachedMarketplace(options: CachedMarketplaceOptions = {}) {
     rarities: [],
     total: 0
   })
+  
+  // ✅ Track loading để tránh concurrent requests
+  const [isCurrentlyFetching, setIsCurrentlyFetching] = useState(false)
 
+  // ✅ Memoize options để tránh infinite loop
+  const stableOptions = useMemo(() => ({
+    limit: options.limit || 50,
+    offset: options.offset || 0,
+    collection: options.collection,
+    seller: options.seller,
+    search: options.search,
+    includeAuctions: options.includeAuctions || false
+  }), [
+    options.limit,
+    options.offset, 
+    options.collection,
+    options.seller,
+    options.search,
+    options.includeAuctions
+  ])
+
+  // ✅ Add debouncing để tránh spam requests
   const fetchCachedData = useCallback(async (opts: CachedMarketplaceOptions = {}) => {
+    // ✅ Prevent concurrent requests
+    if (isCurrentlyFetching) {
+      console.log('⏳ Request already in progress, skipping...')
+      return
+    }
+    
     try {
+      setIsCurrentlyFetching(true)
       setState(prev => ({ ...prev, loading: true, error: null }))
+      
+      // Small delay để avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 50))
 
       const { limit = 50, offset = 0, collection, seller, search, includeAuctions = false } = opts
 
@@ -96,16 +127,18 @@ export function useCachedMarketplace(options: CachedMarketplaceOptions = {}) {
         loading: false,
         error: error instanceof Error ? error.message : 'Failed to load marketplace data'
       }))
+    } finally {
+      setIsCurrentlyFetching(false)
     }
-  }, [])
+  }, [isCurrentlyFetching])
 
   const refetch = useCallback(() => {
-    fetchCachedData(options)
-  }, [fetchCachedData, options])
+    fetchCachedData(stableOptions)
+  }, [fetchCachedData, stableOptions])
 
   useEffect(() => {
-    fetchCachedData(options)
-  }, [fetchCachedData, options])
+    fetchCachedData(stableOptions)
+  }, [fetchCachedData, stableOptions])
 
   return {
     nfts: state.nfts,

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react'
 import { useCachedMarketplace } from '@/hooks/use-cached-marketplace'
 import { ProcessedNFT } from '@/interfaces/nft'
 
@@ -43,6 +43,13 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [pageLoading, setPageLoading] = useState(false)
   const ITEMS_PER_PAGE = 50
   
+  // ✅ Memoize options để tránh re-render
+  const cachedOptions = useMemo(() => ({
+    limit: ITEMS_PER_PAGE,
+    offset: currentOffset,
+    includeAuctions: true
+  }), [currentOffset, ITEMS_PER_PAGE])
+  
   // ✅ USE CACHED DATA INSTEAD OF BLOCKCHAIN - FAST!
   const {
     nfts,
@@ -52,11 +59,7 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     rarities,
     refetch,
     total
-  } = useCachedMarketplace({
-    limit: ITEMS_PER_PAGE,
-    offset: currentOffset,
-    includeAuctions: true
-  })
+  } = useCachedMarketplace(cachedOptions)
   
   // ✅ Accumulate NFTs when new batch loads
   useEffect(() => {

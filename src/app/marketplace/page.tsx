@@ -347,11 +347,18 @@ export default function MarketplacePage() {
   }, [isConnected, buyNFTUnified, toast])
 
   const handleUpdatePrice = useCallback(async () => {
-    if (!selectedNFT || !newPrice) return
+    if (!selectedNFT || !newPrice) {
+      console.error('❌ Missing selectedNFT or newPrice:', { selectedNFT, newPrice })
+      return
+    }
+
+    console.log('🔄 Starting price update for NFT:', selectedNFT)
 
     try {
       const id = getListingId(selectedNFT)
       validateListingId(id, 'price update')
+      
+      console.log('✅ Valid listing ID for price update:', id)
       
       setProcessingNFT(id)
       setPendingTransaction({
@@ -360,11 +367,20 @@ export default function MarketplacePage() {
         data: { newPrice }
       })
       
+      // Convert price to wei
+      const priceInWei = parseEther(newPrice)
+      console.log('💰 Price in wei:', priceInWei.toString())
+      
       // Only do blockchain transaction, database update will happen on confirmation
       if (selectedNFT.isBundle && selectedNFT.collectionId) {
-        await updateBundlePrice(selectedNFT.collectionId, newPrice)
+        console.log('📦 Updating bundle price...')
+        await updateBundlePrice(selectedNFT.collectionId, priceInWei.toString())
       } else if (selectedNFT.listingId) {
-        await updatePrice(selectedNFT.listingId, newPrice)
+        console.log('🎯 Updating single NFT price...')
+        await updatePrice(selectedNFT.listingId, priceInWei.toString())
+      } else {
+        console.log('🔄 Using unified update with ID:', id)
+        await updatePrice(id, priceInWei.toString())
       }
       
       toast({
@@ -384,9 +400,18 @@ export default function MarketplacePage() {
   }, [selectedNFT, newPrice, updatePrice, updateBundlePrice, toast])
 
   const handleCancelListing = useCallback(async (nft: ProcessedNFT) => {
+    if (!nft) {
+      console.error('❌ Missing NFT for cancellation:', nft)
+      return
+    }
+
+    console.log('🔄 Starting cancellation for NFT:', nft)
+
     try {
       const id = getListingId(nft)
       validateListingId(id, 'cancel listing')
+      
+      console.log('✅ Valid listing ID for cancellation:', id)
       
       setProcessingNFT(id)
       setPendingTransaction({
@@ -395,6 +420,7 @@ export default function MarketplacePage() {
       })
       
       // Only do blockchain transaction, database update will happen on confirmation
+      console.log('🔄 Calling cancelListingUnified with ID:', id)
       await cancelListingUnified(id)
       
       toast({

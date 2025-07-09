@@ -63,6 +63,7 @@ import { config } from "@/components/config/wagmiConfig"
 import { Checkbox } from "@/components/ui/checkbox"
 import { syncListingToDatabase, syncAuctionToDatabase, prepareListingData, prepareAuctionData } from "@/utils/syncToDatabase"
 import { getListingIdFromTransaction, getLatestListingIdForUser } from "@/utils/getListingIdFromTransaction"
+import CollectionManager from "@/components/profile/CollectionManager"
 interface UserProfile {
   name: string
   description: string
@@ -1409,9 +1410,10 @@ export default function ProfilePage() {
         {/* Tabs Section */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
           <div className="flex items-center justify-between mb-6">
-            <TabsList className="grid w-full max-w-md grid-cols-4">
+            <TabsList className="grid w-full max-w-lg grid-cols-5">
               <TabsTrigger value="owned">Owned ({userProfile.stats.owned})</TabsTrigger>
               <TabsTrigger value="created">Created ({userProfile.stats.created})</TabsTrigger>
+              <TabsTrigger value="collections">Collections</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
               <TabsTrigger value="offers">Offers</TabsTrigger>
             </TabsList>
@@ -1550,6 +1552,14 @@ export default function ProfilePage() {
                 NFTs you&apos;ve created will appear here.
               </p>
             </div>
+          </TabsContent>
+
+          <TabsContent value="collections">
+            <CollectionManager
+              userAddress={address || ''}
+              userNFTs={nfts}
+              onRefresh={refetch}
+            />
           </TabsContent>
 
           <TabsContent value="activity">

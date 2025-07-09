@@ -1,76 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { writeFile } from 'fs/promises'
+import { join } from 'path'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('File upload API called')
-    
-    const formData = await request.formData()
-    const file = formData.get('file') as File
+    const data = await request.formData()
+    const file: File | null = data.get('file') as unknown as File
 
     if (!file) {
-      console.error('No file provided in request')
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
     }
 
-    console.log('File received:', {
-      name: file.name,
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 })
+    }
+
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (file.size > maxSize) {
+      return NextResponse.json({ error: 'File too large' }, { status: 400 })
+    }
+
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
+
+    // Generate unique filename
+    const timestamp = Date.now()
+    const randomString = Math.random().toString(36).substring(2, 15)
+    const extension = file.name.split('.').pop()
+    const filename = `${timestamp}-${randomString}.${extension}`
+
+    // Save to public/uploads directory
+    const uploadDir = join(process.cwd(), 'public', 'uploads')
+    const filePath = join(uploadDir, filename)
+
+    // Create directory if it doesn't exist
+    try {
+      await writeFile(filePath, buffer)
+    } catch (error) {
+      // If directory doesn't exist, create it
+      const fs = require('fs')
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true })
+      }
+      await writeFile(filePath, buffer)
+    }
+
+    // Return the public URL
+    const publicUrl = `/uploads/${filename}`
+
+    return NextResponse.json({
+      success: true,
+      url: publicUrl,
+      filename,
       size: file.size,
       type: file.type
     })
 
-    // Check environment variables
-    if (!process.env.JWT) {
-      console.error('PINATA_JWT not configured')
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-    }
-
-    if (!process.env.GATEWAY) {
-      console.error('GATEWAY not configured')  
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-    }
-
-    // Upload to Pinata
-    const pinataFormData = new FormData()
-    pinataFormData.append('file', file)
-
-    console.log('Uploading to Pinata...')
-    
-    const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.JWT}`,
-      },
-      body: pinataFormData,
-    })
-
-    console.log('Pinata response status:', response.status)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Pinata API error:', response.status, errorText)
-      return NextResponse.json({ 
-        error: `Pinata upload failed: ${response.status}`,
-        details: errorText
-      }, { status: 500 })
-    }
-
-    const data = await response.json()
-    console.log('Pinata response data:', data)
-    
-    const ipfsUrl = `https://${process.env.GATEWAY}/ipfs/${data.IpfsHash}`
-    console.log('Generated IPFS URL:', ipfsUrl)
-
-    return NextResponse.json({ 
-      ipfsUrl, 
-      ipfsHash: data.IpfsHash 
-    })
   } catch (error) {
-    console.error('Upload API error:', error)
+    console.error('Upload error:', error)
     return NextResponse.json(
-      { 
-        error: 'Failed to upload file',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Upload failed' },
       { status: 500 }
     )
   }

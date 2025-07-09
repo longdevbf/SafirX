@@ -40,6 +40,14 @@ export interface ProcessedNFT {
   bundleTokenIds?: string[]
   canPurchase?: boolean
   
+  // Auction specific fields
+  auctionId?: string
+  startingPrice?: string
+  reservePrice?: string
+  currentBid?: string
+  bidCount?: number
+  endTime?: Date
+  
   // Display fields
   views?: number
   likes?: number

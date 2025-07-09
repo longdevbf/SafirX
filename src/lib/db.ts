@@ -2,8 +2,9 @@ import {Pool, PoolClient} from 'pg';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-
+    ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
 })
+
 export const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
   const client: PoolClient = await pool.connect()
   
@@ -638,13 +639,16 @@ export const initializeDatabase = async () => {
 
 // Test database connection
 export const testConnection = async () => {
+  const client = await pool.connect()
   try {
-    const result = await sql`SELECT NOW() as current_time`
-    console.log('Database connection successful:', result[0].current_time)
+    const result = await client.query('SELECT NOW() as current_time')
+    console.log('Database connection successful:', result.rows[0].current_time)
     return true
   } catch (error) {
     console.error('Database connection failed:', error)
     return false
+  } finally {
+    client.release()
   }
 }
 

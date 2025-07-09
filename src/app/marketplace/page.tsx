@@ -28,6 +28,26 @@ import { useToast } from "@/hooks/use-toast"
 import { useMarketplace } from "@/context/marketplaceContext"
 import { getRosePrice } from "@/services/rose_usd"
 
+// Helper function for robust ID extraction
+const getListingId = (nft: ProcessedNFT): string => {
+  // Priority: listingId > collectionId > id
+  const id = nft.listingId || nft.collectionId || nft.id || ''
+  
+  if (!id || id === 'undefined' || id === 'null') {
+    console.error('❌ Invalid NFT ID:', nft)
+    throw new Error(`Invalid listing ID: ${id}`)
+  }
+  
+  return id
+}
+
+// Helper function for ID validation
+const validateListingId = (id: string, operation: string): void => {
+  if (!id || id === 'undefined' || id === 'null' || id.length < 10) {
+    throw new Error(`Invalid listing ID for ${operation}: ${id}`)
+  }
+}
+
 export default function MarketplacePage() {
   const [selectedTab, setSelectedTab] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -132,7 +152,7 @@ export default function MarketplacePage() {
 
   // ✅ FIXED: Define utility functions before using them
   const getNFTId = useCallback((nft: ProcessedNFT) => {
-    return nft.isBundle && nft.collectionId ? nft.collectionId : nft.listingId
+    return getListingId(nft)
   }, [])
 
   const isProcessing = useCallback((nft: ProcessedNFT) => {
@@ -280,10 +300,16 @@ export default function MarketplacePage() {
     }
 
     try {
-      const id = nft.isBundle && nft.collectionId ? nft.collectionId : nft.listingId
-      if (!id) {
-        throw new Error("Invalid listing ID")
-      }
+      const id = getListingId(nft)
+      validateListingId(id, 'purchase')
+      
+      console.log('🔍 Purchase ID extraction:', {
+        isBundle: nft.isBundle,
+        collectionId: nft.collectionId,
+        listingId: nft.listingId,
+        finalId: id,
+        nftData: nft
+      })
       
       setProcessingNFT(id)
       setPendingTransaction({
@@ -303,7 +329,7 @@ export default function MarketplacePage() {
       console.error("Purchase error:", error)
       toast({
         title: "Purchase Failed",
-        description: error as string || "Failed to purchase NFT. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to purchase NFT. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
@@ -315,10 +341,8 @@ export default function MarketplacePage() {
     if (!selectedNFT || !newPrice) return
 
     try {
-      const id = selectedNFT.isBundle && selectedNFT.collectionId ? selectedNFT.collectionId : selectedNFT.listingId
-      if (!id) {
-        throw new Error("Invalid listing ID")
-      }
+      const id = getListingId(selectedNFT)
+      validateListingId(id, 'price update')
       
       setProcessingNFT(id)
       setPendingTransaction({
@@ -339,9 +363,10 @@ export default function MarketplacePage() {
         description: "Please confirm the transaction in your wallet...",
       })
     } catch (error) {
+      console.error("Price update error:", error)
       toast({
         title: "Price Update Failed",
-        description: error as string || "Failed to update price. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update price. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
@@ -351,10 +376,8 @@ export default function MarketplacePage() {
 
   const handleCancelListing = useCallback(async (nft: ProcessedNFT) => {
     try {
-      const id = nft.isBundle && nft.collectionId ? nft.collectionId : nft.listingId
-      if (!id) {
-        throw new Error("Invalid listing ID")
-      }
+      const id = getListingId(nft)
+      validateListingId(id, 'cancel listing')
       
       setProcessingNFT(id)
       setPendingTransaction({
@@ -370,9 +393,10 @@ export default function MarketplacePage() {
         description: "Please confirm the transaction in your wallet...",
       })
     } catch (error) {
+      console.error("Cancel listing error:", error)
       toast({
         title: "Cancellation Failed",
-        description: error as string || "Failed to cancel listing. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to cancel listing. Please try again.",
         variant: "destructive"
       })
       setProcessingNFT(null)
@@ -385,9 +409,12 @@ export default function MarketplacePage() {
     if (isConfirmed && hash && pendingTransaction) {
       const handleDatabaseUpdate = async () => {
         try {
+          console.log('🔄 Processing database update:', pendingTransaction)
+          
           switch (pendingTransaction.type) {
             case 'buy':
               if (buyNFT && pendingTransaction.data?.buyerAddress) {
+                console.log('💰 Buying NFT:', pendingTransaction.nftId, 'for', pendingTransaction.data.buyerAddress)
                 await buyNFT(pendingTransaction.nftId, pendingTransaction.data.buyerAddress)
               }
               toast({
@@ -398,6 +425,7 @@ export default function MarketplacePage() {
               
             case 'update':
               if (updateNFTPrice && pendingTransaction.data?.newPrice) {
+                console.log('💲 Updating price:', pendingTransaction.nftId, 'to', pendingTransaction.data.newPrice)
                 await updateNFTPrice(pendingTransaction.nftId, pendingTransaction.data.newPrice)
               }
               toast({
@@ -411,6 +439,7 @@ export default function MarketplacePage() {
               
             case 'cancel':
               if (cancelNFTListing) {
+                console.log('❌ Cancelling listing:', pendingTransaction.nftId)
                 await cancelNFTListing(pendingTransaction.nftId)
               }
               toast({
@@ -423,10 +452,10 @@ export default function MarketplacePage() {
           // Refresh marketplace data
           setTimeout(() => refetch && refetch(), 1000)
         } catch (error) {
-          console.error('Database update error:', error)
+          console.error('❌ Database update error:', error)
           toast({
             title: "Database Update Failed",
-            description: "Transaction succeeded but database update failed. Data will sync eventually.",
+            description: `Transaction succeeded but database update failed: ${error}`,
             variant: "destructive"
           })
         }

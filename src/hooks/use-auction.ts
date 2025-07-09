@@ -506,15 +506,15 @@ export function useAuctionDetail(auctionId: string) {
     try {
       setLoadingBids(true)
       
-      console.log(`🔍 Fetching public bid history for auction ${auctionId}...`)
-      console.log(`📋 Auction details:`, {
-        auctionId,
-        state: auction?.state,
-        isFinalized: auction?.isFinalized,
-        allowPublicReveal: auction?.allowPublicReveal,
-        totalBids: auction?.totalBids?.toString(),
-        seller: auction?.seller
-      })
+      // console.log(`🔍 Fetching public bid history for auction ${auctionId}...`)
+      // console.log(`📋 Auction details:`, {
+      //   auctionId,
+      //   state: auction?.state,
+      //   isFinalized: auction?.isFinalized,
+      //   allowPublicReveal: auction?.allowPublicReveal,
+      //   totalBids: auction?.totalBids?.toString(),
+      //   seller: auction?.seller
+      // })
       
       const bids = await publicClient.readContract({
         address: SEALED_BID_AUCTION_CONFIG.address,
@@ -523,7 +523,7 @@ export function useAuctionDetail(auctionId: string) {
         args: [BigInt(auctionId)]
       }) as PublicBidInfo[]
       
-      console.log(`📊 Smart contract returned ${bids.length} public bids for auction ${auctionId}:`, bids)
+    //  console.log(`📊 Smart contract returned ${bids.length} public bids for auction ${auctionId}:`, bids)
       
       if (bids.length === 0 && auction?.totalBids && auction.totalBids > 0) {
         console.log(`⚠️ Expected ${auction.totalBids.toString()} bids but got 0 public bids. This means:`)
@@ -581,7 +581,7 @@ export function useAllAuctions() {
       setLoading(true)
       setError(null)
       
-      console.log('🔍 Starting to fetch all auctions...')
+    //  console.log('🔍 Starting to fetch all auctions...')
       
       // Step 1: First try to get active auctions (these we know exist and work)
       const allAuctionIds = new Set<bigint>()
@@ -601,12 +601,12 @@ export function useAllAuctions() {
             maxRetries: 3,
             delayMs: 1000,
             onRetry: (attempt, error) => {
-              console.log(`🔄 Retrying to fetch active auctions (attempt ${attempt}/3):`, error)
+             // console.log(`🔄 Retrying to fetch active auctions (attempt ${attempt}/3):`, error)
             }
           }
         ) as bigint[]
         
-        console.log('✅ Active auction IDs from contract:', activeAuctionIds.map(id => id.toString()))
+     //   console.log('✅ Active auction IDs from contract:', activeAuctionIds.map(id => id.toString()))
         activeAuctionIds.forEach(id => allAuctionIds.add(id))
       } catch (error) {
         console.warn('❌ Failed to get active auctions after retries:', error)
@@ -624,7 +624,7 @@ export function useAllAuctions() {
         const startScan = Math.max(1, minActiveId - 10)
         const endScan = maxActiveId + 10
         
-        console.log(`🔍 Scanning auction IDs ${startScan} to ${endScan} for ended/finalized auctions...`)
+     //  console.log(`🔍 Scanning auction IDs ${startScan} to ${endScan} for ended/finalized auctions...`)
         
         // Scan in smaller batches to avoid timeout
         const batchSize = 5
@@ -708,8 +708,8 @@ export function useAllAuctions() {
       }
       
       const finalAuctionIds = Array.from(allAuctionIds).sort((a, b) => Number(a) - Number(b))
-      console.log(`📊 Total unique auctions found: ${finalAuctionIds.length}`)
-      console.log('🔢 Auction IDs:', finalAuctionIds.map(id => id.toString()))
+ //     console.log(`📊 Total unique auctions found: ${finalAuctionIds.length}`)
+   //   console.log('🔢 Auction IDs:', finalAuctionIds.map(id => id.toString()))
       
       if (finalAuctionIds.length === 0) {
         console.log('⚠️ No auctions found')
@@ -839,12 +839,12 @@ export function useAllAuctions() {
             tokenIdsList: tokenIds
           }
           
-          console.log(`✅ Processed auction ${id}:`, {
-            title: auctionData.title,
-            state: auctionData.state,
-            timeRemaining,
-            endTime: new Date(endTime * 1000).toLocaleString()
-          })
+          // console.log(`✅ Processed auction ${id}:`, {
+          //   title: auctionData.title,
+          //   state: auctionData.state,
+          //   timeRemaining,
+          //   endTime: new Date(endTime * 1000).toLocaleString()
+          // })
           
           return processedAuction
         } catch (error) {
@@ -856,7 +856,7 @@ export function useAllAuctions() {
       const results = await Promise.all(auctionPromises)
       const validAuctions = results.filter((auction): auction is ProcessedAuction => auction !== null)
       
-      console.log(`🎉 Successfully fetched ${validAuctions.length} valid auctions`)
+     // console.log(`🎉 Successfully fetched ${validAuctions.length} valid auctions`)
       setAuctions(validAuctions)
     } catch (error) {
       console.error('❌ Error fetching all auctions:', error)

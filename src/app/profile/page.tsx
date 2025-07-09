@@ -63,7 +63,7 @@ import { config } from "@/components/config/wagmiConfig"
 import { Checkbox } from "@/components/ui/checkbox"
 import { syncListingToDatabase, syncAuctionToDatabase, prepareListingData, prepareAuctionData } from "@/utils/syncToDatabase"
 import { getListingIdFromTransaction, getLatestListingIdForUser } from "@/utils/getListingIdFromTransaction"
-import CollectionManager from "@/components/profile/CollectionManager"
+
 interface UserProfile {
   name: string
   description: string
@@ -267,6 +267,74 @@ export default function ProfilePage() {
           
           // Execute async sync
           syncWithRealListingId()
+        } else if (currentTransactionType === 'collection') {
+          // ✅ NEW: Handle collection listing success
+          const syncCollectionToDatabase = async () => {
+            try {
+              console.log('🔍 Syncing collection to database from transaction:', marketHash)
+              
+              // Get collection data from window storage
+              const collectionData = (window as any).pendingCollectionData as CollectionSellData
+              if (!collectionData) {
+                console.error('❌ No pending collection data found')
+                return
+              }
+              
+              // Get real listing/collection ID from transaction
+              const { listingId, collectionId } = await getListingIdFromTransaction(marketHash)
+              const realId = collectionId || listingId
+              
+              if (!realId) {
+                console.error('❌ Could not get collection ID from transaction')
+                return
+              }
+              
+              // Create collection in database
+              const collectionPayload = {
+                collection_id: realId,
+                name: collectionData.collectionName,
+                description: collectionData.collectionDescription || '',
+                cover_image: collectionData.collectionImage || '',
+                creator_address: address || '',
+                contract_address: collectionData.nftContract,
+                is_bundle: collectionData.listingType === 'bundle',
+                bundle_price: collectionData.bundlePrice ? parseFloat(collectionData.bundlePrice) : undefined,
+                listing_type: collectionData.listingType === 'bundle' ? 1 : collectionData.listingType === 'same-price' ? 2 : 0,
+                tx_hash: marketHash,
+                total_items: collectionData.tokenIds.length,
+                items: collectionData.tokenIds.map((tokenId, index) => ({
+                  listing_id: `${realId}-${tokenId}`,
+                  nft_contract: collectionData.nftContract,
+                  token_id: tokenId,
+                  price: collectionData.listingType === 'bundle' ? 0 : 
+                        collectionData.listingType === 'same-price' ? parseFloat(collectionData.samePricePerItem || '0') :
+                        parseFloat(collectionData.individualPrices?.[index] || '0')
+                }))
+              }
+              
+              const response = await fetch('/api/collections', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(collectionPayload)
+              })
+              
+              if (response.ok) {
+                console.log('✅ Collection synced to database successfully')
+                // Clear pending data
+                delete (window as any).pendingCollectionData
+              } else {
+                console.error('❌ Failed to sync collection to database')
+              }
+              
+            } catch (error) {
+              console.error('❌ Error syncing collection to database:', error)
+            }
+          }
+          
+          // Execute async sync
+          syncCollectionToDatabase()
         }
 
         const isCollection = currentTransactionType === 'collection'
@@ -537,6 +605,8 @@ export default function ProfilePage() {
         description: "Please confirm the listing transaction in your wallet...",
       })
 
+      // Store collection data for later database sync
+      ;(window as any).pendingCollectionData = data
       setCurrentTransactionType('collection')
 
       if (data.listingType === 'bundle') {
@@ -1410,10 +1480,9 @@ export default function ProfilePage() {
         {/* Tabs Section */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
           <div className="flex items-center justify-between mb-6">
-            <TabsList className="grid w-full max-w-lg grid-cols-5">
+            <TabsList className="grid w-full max-w-md grid-cols-4">
               <TabsTrigger value="owned">Owned ({userProfile.stats.owned})</TabsTrigger>
               <TabsTrigger value="created">Created ({userProfile.stats.created})</TabsTrigger>
-              <TabsTrigger value="collections">Collections</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
               <TabsTrigger value="offers">Offers</TabsTrigger>
             </TabsList>
@@ -1554,13 +1623,7 @@ export default function ProfilePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="collections">
-            <CollectionManager
-              userAddress={address || ''}
-              userNFTs={nfts}
-              onRefresh={refetch}
-            />
-          </TabsContent>
+
 
           <TabsContent value="activity">
             <div className="text-center py-12">

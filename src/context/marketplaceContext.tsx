@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { useMarketplaceNFTs } from '@/hooks/use-market'
+import { useCachedMarketplace } from '@/hooks/use-cached-marketplace'
 import { ProcessedNFT } from '@/interfaces/nft'
 
 // Define context type
@@ -38,8 +38,12 @@ export const useMarketplace = () => useContext(MarketplaceContext)
 
 export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isInitialized, setIsInitialized] = useState(false)
+  const [currentOffset, setCurrentOffset] = useState(0)
+  const [allNFTs, setAllNFTs] = useState<ProcessedNFT[]>([])
+  const [pageLoading, setPageLoading] = useState(false)
+  const ITEMS_PER_PAGE = 50
   
-  // Lấy dữ liệu từ hook gốc
+  // ✅ USE CACHED DATA INSTEAD OF BLOCKCHAIN - FAST!
   const {
     nfts,
     loading,
@@ -48,50 +52,62 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     rarities,
     refetch,
     total
-  } = useMarketplaceNFTs()
-
-  // Thêm biến state để giả lập phân trang
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [hasLoaded, setHasLoaded] = useState(false)
-  const [pageLoading, setPageLoading] = useState(false)
+  } = useCachedMarketplace({
+    limit: ITEMS_PER_PAGE,
+    offset: currentOffset,
+    includeAuctions: true
+  })
   
-  // Set initialized when first batch of NFTs is loaded
+  // ✅ Accumulate NFTs when new batch loads
   useEffect(() => {
     if (!loading && nfts.length > 0) {
       setIsInitialized(true)
-      setHasLoaded(true)
+      // If this is a new page load, append to existing NFTs
+      if (currentOffset > 0) {
+        setAllNFTs((prev: ProcessedNFT[]) => [...prev, ...nfts])
+      } else {
+        // First load, replace all
+        setAllNFTs(nfts)
+      }
     }
-  }, [loading, nfts])
+  }, [loading, nfts, currentOffset])
 
   // Begin loading immediately when component mounts
   useEffect(() => {
   }, [])
   
-  // Tạo hàm loadMoreNFTs giả (sẽ không cần trong cách tiếp cận này)
+  // ✅ Proper loadMore implementation with pagination
   const loadMoreNFTs = async (): Promise<void> => {
+    if (pageLoading || loading) return
+    
     setPageLoading(true)
     try {
-      // Chúng ta không thực sự load thêm vì hook gốc đã load hết
-      console.log("🔄 Simulating loading more NFTs...")
-      // Tạm dừng để giả lập loading
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const nextOffset = currentOffset + ITEMS_PER_PAGE
+      setCurrentOffset(nextOffset)
     } finally {
       setPageLoading(false)
     }
   }
+  
+  // ✅ Calculate if there are more items to load
+  const hasMore = allNFTs.length < total && total > 0
 
   return (
     <MarketplaceContext.Provider
       value={{
-        nfts,
+        nfts: allNFTs, // ✅ USE ACCUMULATED NFTs
         loading,
         pageLoading,
         error,
         collections,
         rarities,
         loadMoreNFTs,
-        refetch,
-        hasMore: false, // Không cần phân trang vì load tất cả
+        refetch: async () => {
+          setCurrentOffset(0)
+          setAllNFTs([])
+          await refetch()
+        },
+        hasMore, // ✅ PROPER PAGINATION CHECK
         isInitialized,
         total,
       }}

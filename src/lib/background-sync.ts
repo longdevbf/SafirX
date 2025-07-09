@@ -216,7 +216,15 @@ class BackgroundSyncService {
         abi: SEALED_BID_AUCTION_CONFIG.abi,
         functionName: 'getAuction',
         args: [id]
-      }) as any; // Type would depend on your auction struct
+      }) as {
+        state: number;
+        highestBid: bigint;
+        bidCount: number;
+        seller: string;
+        startTime: bigint;
+        endTime: bigint;
+        allowPublicReveal: boolean;
+      };
 
       if (!auction || auction.state !== 0) { // Assuming 0 is ACTIVE state
         // Mark as inactive in cache

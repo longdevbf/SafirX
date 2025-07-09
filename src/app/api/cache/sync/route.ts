@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cacheQueries, initializeCacheTables } from '@/lib/db-cache';
 import { readContract } from 'wagmi/actions';
 import { config } from '@/components/config/wagmiConfig';
-import { NFT_MARKET_CONFIG, ERC721_ABI } from '@/abis/MarketABI';
-import { SEALED_BID_AUCTION_CONFIG } from '@/abis/AuctionSealedBid';
+import { ERC721_ABI } from '@/abis/MarketABI';
 import { formatEther } from 'viem';
 
 // Initialize database tables on first run
@@ -11,8 +10,13 @@ let dbInitialized = false;
 
 async function ensureDbInitialized() {
   if (!dbInitialized) {
-    await initializeCacheTables();
-    dbInitialized = true;
+    try {
+      await initializeCacheTables();
+      dbInitialized = true;
+    } catch (error) {
+      console.log('Database tables might already exist:', error);
+      dbInitialized = true; // Prevent repeated attempts
+    }
   }
 }
 

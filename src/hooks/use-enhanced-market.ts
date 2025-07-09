@@ -142,7 +142,11 @@ export function useEnhancedAuction() {
 }
 
 // Helper function to extract listing ID from transaction receipt
-export function extractListingIdFromReceipt(receipt: any): string | null {
+export function extractListingIdFromReceipt(receipt: {
+  logs?: Array<{
+    topics?: string[]
+  }>
+}): string | null {
   try {
     // This would parse the transaction receipt to extract the listing ID
     // The actual implementation depends on your smart contract events

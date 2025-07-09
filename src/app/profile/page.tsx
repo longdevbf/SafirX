@@ -61,6 +61,7 @@ import { readContract } from "wagmi/actions"
 import { ERC721_ABI } from "@/abis/MarketABI"
 import { config } from "@/components/config/wagmiConfig"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useCacheSync } from "@/hooks/use-cached-marketplace"
 interface UserProfile {
   name: string
   description: string
@@ -109,6 +110,7 @@ export default function ProfilePage() {
   const { address, isConnected } = useWallet()
   const { nfts, loading, error, total, refetch } = useWalletNFTs()
   const { refreshProfile } = useUserProfile()
+  const { syncListing, syncAuction } = useCacheSync()
 
   // NFT Market hooks
   const {
@@ -222,6 +224,30 @@ export default function ProfilePage() {
           ),
           duration: 15000,
         })
+
+        // ✅ SYNC TO DATABASE for fast loading in marketplace
+        if (currentTransactionType === 'single' && selectedNFT && sellPrice) {
+          console.log('🔄 Syncing single NFT to database...')
+          syncListing(marketHash, {
+            nftContract: selectedNFT.contractAddress,
+            tokenId: selectedNFT.tokenId,
+            seller: address,
+            price: sellPrice,
+            isBundle: false,
+            listingType: 'single'
+          }).then(() => {
+            console.log('✅ NFT synced to database successfully')
+            toast({
+              title: "✨ Database Synced",
+              description: "NFT is now available in the marketplace!",
+              duration: 3000,
+            })
+          }).catch(error => {
+            console.error('❌ Failed to sync to database:', error)
+          })
+        } else if (currentTransactionType === 'collection') {
+          console.log('🔄 Collection listing detected, sync will be handled by collection handler')
+        }
 
         // ✅ Reset loading states only
         setIsListingNFT(false)
@@ -766,11 +792,40 @@ export default function ProfilePage() {
   React.useEffect(() => {
     if (isAuctionConfirmed && auctionHash) {
       showSuccessMessage("🎉 Auction Created Successfully!", auctionHash)
+      
+      // ✅ SYNC AUCTION TO DATABASE
+      if (selectedAuctionNFT && auctionData) {
+        console.log('🔄 Syncing auction to database...')
+        syncAuction(auctionHash, {
+          nftContract: selectedAuctionNFT.contractAddress,
+          tokenIds: [selectedAuctionNFT.tokenId],
+          seller: address,
+          startingPrice: auctionData.startingPrice,
+          reservePrice: auctionData.reservePrice,
+          currentHighestBid: '0',
+          title: auctionData.title,
+          description: auctionData.description,
+          isCollection: false,
+          startTime: Math.floor(Date.now() / 1000),
+          endTime: Math.floor(Date.now() / 1000) + (auctionData.duration * 3600),
+          allowPublicReveal: auctionData.allowPublicReveal
+        }).then(() => {
+          console.log('✅ Auction synced to database successfully')
+          toast({
+            title: "✨ Database Synced",
+            description: "Auction is now visible in the marketplace!",
+            duration: 3000,
+          })
+        }).catch(error => {
+          console.error('❌ Failed to sync auction to database:', error)
+        })
+      }
+      
       setShowAuctionDialog(false)
       setShowAuctionCollectionSelector(false)
       setSelectedAuctionNFT(null)
     }
-  }, [isAuctionConfirmed, auctionHash])
+  }, [isAuctionConfirmed, auctionHash, selectedAuctionNFT, auctionData, address, syncAuction])
 
   // ✅ NEW: Handle single NFT auction
   const handleCreateSingleAuction = async (nft: ProcessedNFT) => {

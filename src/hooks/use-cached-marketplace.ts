@@ -120,7 +120,16 @@ export function useCachedMarketplace(options: CachedMarketplaceOptions = {}) {
 
 // Hook for syncing data to cache after transactions
 export function useCacheSync() {
-  const syncListing = useCallback(async (blockchainId: string, data: any) => {
+  const syncListing = useCallback(async (blockchainId: string, data: {
+    nftContract: string
+    tokenId?: string
+    tokenIds?: string[]
+    seller?: string
+    price?: string
+    collectionName?: string
+    isBundle?: boolean
+    listingType?: string
+  }) => {
     try {
       const response = await fetch('/api/cache/sync', {
         method: 'POST',
@@ -144,7 +153,20 @@ export function useCacheSync() {
     }
   }, [])
 
-  const syncAuction = useCallback(async (blockchainId: string, data: any) => {
+  const syncAuction = useCallback(async (blockchainId: string, data: {
+    nftContract: string
+    tokenIds: string[]
+    seller?: string
+    startingPrice: string
+    reservePrice: string
+    currentHighestBid?: string
+    title?: string
+    description?: string
+    isCollection?: boolean
+    startTime?: number
+    endTime?: number
+    allowPublicReveal?: boolean
+  }) => {
     try {
       const response = await fetch('/api/cache/sync', {
         method: 'POST',
@@ -168,7 +190,7 @@ export function useCacheSync() {
     }
   }, [])
 
-  const updateCachedData = useCallback(async (type: 'listing' | 'auction', blockchainId: string, updates: any) => {
+  const updateCachedData = useCallback(async (type: 'listing' | 'auction', blockchainId: string, updates: Record<string, unknown>) => {
     try {
       const response = await fetch('/api/cache/sync', {
         method: 'PUT',

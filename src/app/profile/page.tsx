@@ -62,6 +62,7 @@ import { ERC721_ABI } from "@/abis/MarketABI"
 import { config } from "@/components/config/wagmiConfig"
 import { Checkbox } from "@/components/ui/checkbox"
 import { syncListingToDatabase, syncAuctionToDatabase, prepareListingData, prepareAuctionData } from "@/utils/syncToDatabase"
+import { getListingIdFromTransaction, getLatestListingIdForUser } from "@/utils/getListingIdFromTransaction"
 interface UserProfile {
   name: string
   description: string
@@ -202,29 +203,62 @@ export default function ProfilePage() {
         if (currentTransactionType === 'single' && selectedNFT) {
           setSuccessfulNFTId(`${selectedNFT.contractAddress}-${selectedNFT.tokenId}`)
           
-          // ✅ NEW: Sync single NFT listing to database
-          const listingData = prepareListingData(
-            marketHash, // Using transaction hash as listing ID for now
-            selectedNFT.contractAddress,
-            selectedNFT.tokenId,
-            address || '',
-            sellPrice,
-            marketHash,
-            {
-              name: selectedNFT.name,
-              description: sellDescription,
-              category: sellCategory,
-              image: selectedNFT.image || '/placeholder-nft.jpg',
-              attributes: selectedNFT.attributes || [],
-              rarity: selectedNFT.rarity || 'Common',
-              collectionName: selectedNFT.collectionName
+          // ✅ NEW: Get real listing ID from transaction and sync to database
+          const syncWithRealListingId = async () => {
+            try {
+              console.log('🔍 Getting real listing ID from transaction:', marketHash)
+              
+              // Try to get listing ID from transaction logs
+              const { listingId, collectionId, type } = await getListingIdFromTransaction(marketHash)
+              
+              let realListingId = listingId || collectionId
+              
+              // Fallback: Get latest listing ID for user if transaction parsing fails
+              if (!realListingId) {
+                console.log('⚠️ Could not get listing ID from transaction, trying fallback method...')
+                realListingId = await getLatestListingIdForUser(address || '')
+              }
+              
+              if (!realListingId) {
+                console.error('❌ Could not determine real listing ID, using transaction hash as fallback')
+                realListingId = marketHash
+              }
+              
+              console.log('✅ Using listing ID for database sync:', realListingId)
+              
+              const listingData = prepareListingData(
+                realListingId, // Use real listing ID instead of transaction hash
+                selectedNFT.contractAddress,
+                selectedNFT.tokenId,
+                address || '',
+                sellPrice,
+                marketHash,
+                {
+                  name: selectedNFT.name,
+                  description: sellDescription,
+                  category: sellCategory,
+                  image: selectedNFT.image || '/placeholder-nft.jpg',
+                  attributes: selectedNFT.attributes || [],
+                  rarity: selectedNFT.rarity || 'Common',
+                  collectionName: selectedNFT.collectionName
+                }
+              )
+              
+              // Sync to database
+              const success = await syncListingToDatabase(listingData)
+              if (success) {
+                console.log('✅ Successfully synced listing to database with real ID:', realListingId)
+              } else {
+                console.error('❌ Failed to sync listing to database')
+              }
+              
+            } catch (error) {
+              console.error('❌ Error during database sync with real listing ID:', error)
             }
-          )
+          }
           
-          // Sync to database asynchronously
-          syncListingToDatabase(listingData).catch(error => {
-            console.error('Failed to sync listing to database:', error)
-          })
+          // Execute async sync
+          syncWithRealListingId()
         }
 
         const isCollection = currentTransactionType === 'collection'

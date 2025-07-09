@@ -254,10 +254,12 @@ export default function MarketplacePage() {
   const handlePurchase = useCallback(async (nft: ProcessedNFT) => {
     if (!isConnected) {
       toast({
-        title: "Wallet Not Connected",
+        title: "Connect Wallet Required",
         description: "Please connect your wallet to purchase NFTs.",
         variant: "destructive"
       })
+      // Optional: Trigger wallet connection modal
+      window.location.reload()
       return
     }
 
@@ -825,24 +827,7 @@ export default function MarketplacePage() {
     )
   }
 
-  // ✅ Main Marketplace View
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-            <p className="text-muted-foreground mb-4">
-              Please connect your wallet to view the marketplace.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Connect Wallet
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // ✅ No wallet connection required for viewing - only for buying/selling
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
@@ -1180,30 +1165,37 @@ export default function MarketplacePage() {
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex gap-2">
-                                <Button 
-                                  className="flex-1"
-                                  onClick={() => handlePurchase(nft)}
-                                  disabled={isProcessing(nft) || !nft.canPurchase}
-                                >
-                                  {isProcessing(nft) ? (
-                                    <>
-                                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                      Processing...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ShoppingCart className="w-4 h-4 mr-2" />
-                                      Buy Bundle
-                                    </>
-                                  )}
-                                </Button>
-                                <Button 
-                                  variant="outline"
-                                  onClick={() => handleCollectionClick(nft)}
-                                >
-                                  <Users className="w-4 h-4" />
-                                </Button>
+                              <div className="space-y-2">
+                                <div className="flex gap-2">
+                                  <Button 
+                                    className="flex-1"
+                                    onClick={() => handlePurchase(nft)}
+                                    disabled={isProcessing(nft) || !nft.canPurchase}
+                                  >
+                                    {isProcessing(nft) ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                        Processing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ShoppingCart className="w-4 h-4 mr-2" />
+                                        Buy Bundle
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button 
+                                    variant="outline"
+                                    onClick={() => handleCollectionClick(nft)}
+                                  >
+                                    <Users className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                                {!isConnected && (
+                                  <p className="text-xs text-muted-foreground text-center">
+                                    Connect wallet to purchase
+                                  </p>
+                                )}
                               </div>
                             )
                           ) : isOwner(nft) ? (
@@ -1235,23 +1227,30 @@ export default function MarketplacePage() {
                               </Button>
                             </div>
                           ) : (
-                            <Button 
-                              className="w-full" 
-                              onClick={() => handlePurchase(nft)}
-                              disabled={isProcessing(nft) || !nft.canPurchase}
-                            >
-                              {isProcessing(nft) ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                  Processing...
-                                </>
-                              ) : (
-                                <>
-                                  <ShoppingCart className="w-4 h-4 mr-2" />
-                                  Buy Now
-                                </>
+                            <div className="space-y-2">
+                              <Button 
+                                className="w-full" 
+                                onClick={() => handlePurchase(nft)}
+                                disabled={isProcessing(nft) || !nft.canPurchase}
+                              >
+                                {isProcessing(nft) ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    Processing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ShoppingCart className="w-4 h-4 mr-2" />
+                                    Buy Now
+                                  </>
+                                )}
+                              </Button>
+                              {!isConnected && (
+                                <p className="text-xs text-muted-foreground text-center">
+                                  Connect wallet to purchase
+                                </p>
                               )}
-                            </Button>
+                            </div>
                           )}
                         </CardContent>
                       </Card>

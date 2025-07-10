@@ -1,6 +1,6 @@
 # 🎉 **COLLECTION INTEGRATION COMPLETE**
 
-## ✅ **Hoàn thành theo yêu cầu:**
+## ✅ **Hoàn thành theo yêu cầu:*
 
 ### 1. **Tích hợp vào List Collection Dialog** ✅
 - ❌ **Không tạo tab Collections riêng** 

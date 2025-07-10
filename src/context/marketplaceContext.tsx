@@ -46,10 +46,11 @@ export const useMarketplace = () => useContext(MarketplaceContext)
 
 export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isInitialized, setIsInitialized] = useState(false)
+  const [nfts, setNfts] = useState<ProcessedNFT[]>([])
   
   // Use database hook instead of blockchain
   const {
-    nfts,
+    nfts: dbNfts,
     loading,
     error,
     collections: dbCollections,
@@ -59,22 +60,111 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     hasMore,
     total,
     likeNFT,
-    updateNFTPrice,
-    cancelNFTListing,
-    buyNFT
+    updateNFTPrice: dbUpdateNFTPrice,
+    cancelNFTListing: dbCancelNFTListing,
+    buyNFT: dbBuyNFT
   } = useMarketplaceDB()
+
+  // Sync database NFTs with local state
+  useEffect(() => {
+    if (dbNfts) {
+      setNfts(dbNfts)
+    }
+  }, [dbNfts])
+
+  // Enhanced functions with API calls
+  const updateNFTPrice = async (listingId: string, newPrice: string) => {
+    try {
+      const response = await fetch(`/api/listings/${listingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price: newPrice })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update price')
+      }
+      
+      const result = await response.json()
+      
+      // Update local NFT state to reflect the price change
+      setNfts(prev => prev.map(nft => {
+        if ((nft.listingId === listingId || nft.collectionId === listingId || nft.id === listingId)) {
+          return { ...nft, price: newPrice }
+        }
+        return nft
+      }))
+      
+      return result
+    } catch (error) {
+      console.error('Error updating price:', error)
+      throw error
+    }
+  }
+
+  const cancelNFTListing = async (listingId: string) => {
+    try {
+      const response = await fetch(`/api/listings/${listingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: false })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to cancel listing')
+      }
+      
+      // Remove cancelled NFT from local state
+      setNfts(prev => prev.filter(nft => 
+        nft.listingId !== listingId && 
+        nft.collectionId !== listingId && 
+        nft.id !== listingId
+      ))
+      
+      return true
+    } catch (error) {
+      console.error('Error cancelling listing:', error)
+      throw error
+    }
+  }
+
+  const buyNFT = async (listingId: string, buyerAddress: string) => {
+    try {
+      const response = await fetch(`/api/listings/${listingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: false })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to complete purchase')
+      }
+      
+      // Remove purchased NFT from local state
+      setNfts(prev => prev.filter(nft => 
+        nft.listingId !== listingId && 
+        nft.collectionId !== listingId && 
+        nft.id !== listingId
+      ))
+      
+      return await response.json()
+    } catch (error) {
+      console.error('Error completing purchase:', error)
+      throw error
+    }
+  }
 
   const [pageLoading, setPageLoading] = useState(false)
   
   // Set initialized when first batch of NFTs is loaded
   useEffect(() => {
-    if (!loading && nfts.length >= 0) { // Allow empty arrays to be initialized
+    if (!loading) { // Allow empty arrays to be initialized
       setIsInitialized(true)
     }
-  }, [loading, nfts])
+  }, [loading])
 
   // Extract collection names from database collections
-  const collections = dbCollections.map((col: { name: string }) => col.name)
+  const collections = dbCollections?.map ? dbCollections.map((col: { name: string }) => col.name) : []
   
   // Wrapper for loadMoreNFTs with page loading state
   const loadMoreNFTs = async (): Promise<void> => {

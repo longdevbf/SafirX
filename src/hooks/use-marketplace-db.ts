@@ -36,6 +36,15 @@ interface DatabaseListing {
   is_bundle: boolean
   bundle_token_ids?: string
   collection_image?: string
+  cover_image_url?: string
+  bundle_price?: string
+  individual_images?: string
+  individual_metadata?: string
+  nft_names?: string
+  nft_descriptions?: string
+  token_ids_array?: string
+  individual_prices?: string
+  collection_type?: string
   views_count?: number
   likes_count?: number
 }
@@ -54,6 +63,22 @@ interface CollectionSummary {
   totalLikes: number
   totalViews: number
   image: string
+}
+
+interface CollectionDetail {
+  id: string
+  name: string
+  description: string
+  image: string
+  price: string
+  seller: string
+  isBundle: boolean
+  canPurchase: boolean
+  isActive: boolean
+  likes: number
+  views: number
+  collectionId?: string
+  listingId?: string
 }
 
 export function useMarketplaceDB() {
@@ -96,32 +121,60 @@ export function useMarketplaceDB() {
       const data: MarketplaceResponse = await response.json()
       
       // Transform database listings to ProcessedNFT format
-      const processedNFTs: ProcessedNFT[] = data.listings.map(listing => ({
-        id: listing.listing_id,
-        listingId: listing.listing_id,
-        name: listing.name,
-        contractAddress: listing.nft_contract,
-        tokenId: listing.token_id,
-        seller: listing.seller,
-        price: listing.price,
-        collectionName: listing.collection_name || 'Single NFT',
-        image: listing.image,
-        isActive: listing.is_active,
-        collection: (listing.collection_name || 'single-nft').toLowerCase().replace(/\s+/g, '-'),
-        description: listing.description,
-        attributes: listing.attributes ? JSON.parse(listing.attributes) : [],
-        rarity: listing.rarity || 'Common',
-        verified: Boolean(listing.collection_name),
-        isBundle: listing.is_bundle,
-        isFromCollection: Boolean(listing.collection_name && listing.collection_name !== 'Single NFT'),
-        views: listing.views_count || 0,
-        likes: listing.likes_count || 0,
-        canPurchase: listing.is_active,
-        ...(listing.is_bundle && {
-          collectionId: listing.listing_id,
-          bundleTokenIds: listing.bundle_token_ids ? JSON.parse(listing.bundle_token_ids) : []
-        })
-      }))
+      const processedNFTs: ProcessedNFT[] = data.listings.map(listing => {
+        const nft: ProcessedNFT = {
+          id: listing.listing_id,
+          listingId: listing.listing_id,
+          name: listing.name,
+          contractAddress: listing.nft_contract,
+          tokenId: listing.token_id,
+          seller: listing.seller,
+          price: listing.price,
+          collectionName: listing.collection_name || 'Single NFT',
+          image: listing.image,
+          isActive: listing.is_active,
+          collection: (listing.collection_name || 'single-nft').toLowerCase().replace(/\s+/g, '-'),
+          description: listing.description || '',
+          attributes: [],
+          rarity: listing.rarity || 'Common',
+          verified: Boolean(listing.collection_name),
+          isBundle: listing.is_bundle,
+          isFromCollection: Boolean(listing.collection_name && listing.collection_name !== 'Single NFT'),
+          views: listing.views_count || 0,
+          likes: listing.likes_count || 0,
+          canPurchase: listing.is_active,
+        }
+
+        // Parse attributes safely
+        try {
+          if (listing.attributes && typeof listing.attributes === 'string') {
+            nft.attributes = JSON.parse(listing.attributes)
+          }
+        } catch (e) {
+          console.warn('Failed to parse attributes for listing:', listing.listing_id)
+          nft.attributes = []
+        }
+
+        // Add bundle-specific fields
+        if (listing.is_bundle) {
+          nft.collectionId = listing.listing_id
+          // Use cover_image_url for collection display
+          nft.image = listing.cover_image_url || listing.collection_image || listing.image
+          // Use bundle_price for collection pricing
+          nft.price = listing.bundle_price || listing.price
+          
+          try {
+            if (listing.bundle_token_ids) {
+              nft.bundleTokenIds = listing.bundle_token_ids.split(',').map(id => id.trim())
+            }
+          } catch (e) {
+            console.warn('Failed to parse bundle_token_ids for listing:', listing.listing_id)
+            nft.bundleTokenIds = []
+          }
+        }
+
+        return nft
+      })
 
       if (page === 1) {
         setNfts(processedNFTs)
@@ -299,5 +352,142 @@ export function useMarketplaceDB() {
     buyNFT,
     hasMore: pagination.hasNext,
     total: pagination.totalCount
+  }
+}
+
+export function useCollectionDetailFromDB(collectionId?: string) {
+  const [collection, setCollection] = useState<CollectionDetail | null>(null)
+  const [collectionItems, setCollectionItems] = useState<ProcessedNFT[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const isBundle = collection?.isBundle || false
+  const totalItems = collectionItems.length
+  const soldItems = collectionItems.filter(item => !item.isActive).length
+
+  useEffect(() => {
+    if (!collectionId) return
+
+    const fetchCollectionDetail = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // Fetch collection/listing data from API
+        const response = await fetch(`/api/listings/${collectionId}`)
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch collection data')
+        }
+
+        const data = await response.json()
+        
+        if (data.listing) {
+          // Transform database listing to collection format
+          const listing = data.listing
+          
+          setCollection({
+            id: listing.listing_id,
+            name: listing.name,
+            description: listing.description || '',
+            image: listing.cover_image_url || listing.collection_image || listing.image || '/placeholder.svg',
+            price: listing.is_bundle ? (listing.bundle_price || listing.price) : listing.price,
+            seller: listing.seller,
+            isBundle: listing.is_bundle,
+            canPurchase: listing.is_active,
+            isActive: listing.is_active,
+            likes: listing.likes_count || 0,
+            views: listing.views_count || 0,
+            collectionId: listing.is_bundle ? listing.listing_id : undefined,
+            listingId: listing.listing_id
+          })
+
+          // If it's a bundle, fetch individual items
+          if (listing.is_bundle) {
+            const items: ProcessedNFT[] = []
+            
+            if (listing.bundle_token_ids) {
+              const tokenIds = listing.bundle_token_ids.split(',')
+              const individualPrices = listing.individual_prices ? 
+                JSON.parse(listing.individual_prices) : []
+              const individualImages = listing.individual_images ? 
+                JSON.parse(listing.individual_images) : []
+              const individualNames = listing.nft_names ? 
+                JSON.parse(listing.nft_names) : []
+
+              tokenIds.forEach((tokenId: string, index: number) => {
+                items.push({
+                  id: `${listing.listing_id}-${tokenId}`,
+                  listingId: `${listing.listing_id}-${tokenId}`,
+                  name: individualNames[index] || `${listing.name} #${tokenId}`,
+                  contractAddress: listing.nft_contract,
+                  tokenId,
+                  seller: listing.seller,
+                  price: '', // No individual price for bundle items - will show token ID instead
+                  collectionName: listing.collection_name,
+                  image: individualImages[index] || listing.cover_image_url || listing.image,
+                  isActive: listing.is_active,
+                  collection: listing.collection_name?.toLowerCase().replace(/\s+/g, '-') || 'collection',
+                  description: listing.description || '',
+                  attributes: [
+                    { trait_type: 'Token ID', value: tokenId },
+                    { trait_type: 'Bundle Position', value: (index + 1).toString() }
+                  ],
+                  rarity: 'Bundle Item',
+                  verified: true,
+                  isBundle: false,
+                  isFromCollection: true,
+                  views: 0,
+                  likes: 0,
+                  canPurchase: false, // Bundle items can't be purchased individually
+                })
+              })
+            }
+            
+            setCollectionItems(items)
+          } else {
+            // Single NFT
+            setCollectionItems([{
+              id: listing.listing_id,
+              listingId: listing.listing_id,
+              name: listing.name,
+              contractAddress: listing.nft_contract,
+              tokenId: listing.token_id,
+              seller: listing.seller,
+              price: listing.price,
+              collectionName: listing.collection_name,
+              image: listing.image,
+              isActive: listing.is_active,
+              collection: listing.collection_name?.toLowerCase().replace(/\s+/g, '-') || 'single',
+              description: listing.description || '',
+              attributes: listing.attributes ? JSON.parse(listing.attributes) : [],
+              rarity: listing.rarity || 'Common',
+              verified: true,
+              isBundle: false,
+              views: listing.views_count || 0,
+              likes: listing.likes_count || 0,
+              canPurchase: listing.is_active,
+            }])
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching collection detail:', err)
+        setError(err instanceof Error ? err.message : 'Failed to fetch collection')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCollectionDetail()
+  }, [collectionId])
+
+  return {
+    collection,
+    collectionItems,
+    loading,
+    error,
+    isBundle,
+    totalItems,
+    soldItems
   }
 }

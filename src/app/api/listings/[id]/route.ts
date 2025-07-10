@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listingQueries } from '@/lib/db'
 
-// GET /api/listings/[id] - Get specific listing
+// GET /api/listings/[id] - Get listing by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params
+    const listingId = params.id
 
-    if (!id) {
+    if (!listingId) {
       return NextResponse.json({ error: 'Listing ID is required' }, { status: 400 })
     }
 
-    const listing = await listingQueries.getListingById(id)
+    const listing = await listingQueries.getListingById(listingId)
 
     if (!listing) {
       return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
@@ -26,63 +26,71 @@ export async function GET(
   }
 }
 
-// PUT /api/listings/[id] - Update listing price
+// PUT /api/listings/[id] - Update listing
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params
-    const { price } = await request.json()
+    const listingId = params.id
+    const body = await request.json()
 
-    if (!id) {
+    if (!listingId) {
       return NextResponse.json({ error: 'Listing ID is required' }, { status: 400 })
     }
 
-    if (!price) {
-      return NextResponse.json({ error: 'Price is required' }, { status: 400 })
+    const { price, is_active } = body
+
+    if (price !== undefined) {
+      // Update price using smart update (handles both regular price and bundle_price)
+      const updatedListing = await listingQueries.updatePriceSmart(listingId, price)
+      
+      if (!updatedListing) {
+        return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+      }
+      
+      return NextResponse.json({ listing: updatedListing })
     }
 
-    const updatedListing = await listingQueries.updateListingPrice(id, price)
-
-    if (!updatedListing) {
-      return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+    if (is_active !== undefined) {
+      // Update status
+      const updatedListing = await listingQueries.updateListingStatus(listingId, is_active)
+      
+      if (!updatedListing) {
+        return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+      }
+      
+      return NextResponse.json({ listing: updatedListing })
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      listing: updatedListing 
-    })
+    return NextResponse.json({ error: 'No valid updates provided' }, { status: 400 })
   } catch (error) {
-    console.error('Error updating listing price:', error)
-    return NextResponse.json({ error: 'Failed to update listing price' }, { status: 500 })
+    console.error('Error updating listing:', error)
+    return NextResponse.json({ error: 'Failed to update listing' }, { status: 500 })
   }
 }
 
-// DELETE /api/listings/[id] - Cancel/delete listing
+// DELETE /api/listings/[id] - Delete listing (set inactive)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params
+    const listingId = params.id
 
-    if (!id) {
+    if (!listingId) {
       return NextResponse.json({ error: 'Listing ID is required' }, { status: 400 })
     }
 
-    const result = await listingQueries.updateListingStatus(id, false)
+    const updatedListing = await listingQueries.updateListingStatus(listingId, false)
 
-    if (!result) {
+    if (!updatedListing) {
       return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Listing cancelled successfully' 
-    })
+    return NextResponse.json({ listing: updatedListing })
   } catch (error) {
-    console.error('Error cancelling listing:', error)
-    return NextResponse.json({ error: 'Failed to cancel listing' }, { status: 500 })
+    console.error('Error deleting listing:', error)
+    return NextResponse.json({ error: 'Failed to delete listing' }, { status: 500 })
   }
 }

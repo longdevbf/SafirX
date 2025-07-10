@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
@@ -30,10 +31,16 @@ import { getRosePrice } from "@/services/rose_usd"
 
 // Helper function for robust ID extraction
 const getListingId = (nft: ProcessedNFT): string => {
+  // Check if NFT object is valid first
+  if (!nft || typeof nft !== 'object' || Object.keys(nft).length === 0) {
+    console.error('❌ Invalid NFT object:', nft)
+    throw new Error(`Invalid NFT object provided`)
+  }
+
   // Priority: listingId > collectionId > id
   const id = nft?.listingId || nft?.collectionId || nft?.id || ''
   
-  if (!id || id === 'undefined' || id === 'null' || !nft) {
+  if (!id || id === 'undefined' || id === 'null') {
     console.error('❌ Invalid NFT ID:', nft)
     throw new Error(`Invalid listing ID: ${id}`)
   }
@@ -159,9 +166,9 @@ export default function MarketplacePage() {
   }, [nfts])
 
   // ✅ FIXED: Define utility functions before using them
-  const getNFTId = useCallback((nft: ProcessedNFT) => {
-    if (!nft) {
-      console.warn('⚠️ getNFTId called with empty NFT')
+  const getNFTId = useCallback((nft: ProcessedNFT | null | undefined): string => {
+    if (!nft || typeof nft !== 'object' || Object.keys(nft).length === 0) {
+      console.warn('⚠️ getNFTId called with invalid NFT:', nft)
       return ''
     }
     try {
@@ -172,7 +179,8 @@ export default function MarketplacePage() {
     }
   }, [])
 
-  const isProcessing = useCallback((nft: ProcessedNFT) => {
+  const isProcessing = useCallback((nft: ProcessedNFT | null | undefined) => {
+    if (!nft) return false
     return processingNFT === getNFTId(nft)
   }, [processingNFT, getNFTId])
 
@@ -284,10 +292,14 @@ export default function MarketplacePage() {
     })
   }, [])
 
-  // ✅ Handle collection click - show collection details
+  // ✅ Handle collection click - navigate to collection detail page
   const handleCollectionClick = useCallback((nft: ProcessedNFT) => {
     if (nft.isBundle && nft.collectionId) {
-      setSelectedCollectionId(nft.collectionId)
+      // Navigate to collection detail page
+      window.location.href = `/marketplace/collection/${nft.collectionId}`
+    } else if (nft.isBundle && nft.listingId) {
+      // Fallback to listing ID if collection ID is not available
+      window.location.href = `/marketplace/collection/${nft.listingId}`
     }
   }, [])
 
@@ -1445,9 +1457,9 @@ export default function MarketplacePage() {
                     })
                     handleUpdatePrice()
                   }}
-                  disabled={processingNFT === getNFTId(selectedNFT || {} as ProcessedNFT) || !newPrice}
+                  disabled={!selectedNFT || (selectedNFT && processingNFT === getNFTId(selectedNFT)) || !newPrice}
                 >
-                  {processingNFT === getNFTId(selectedNFT || {} as ProcessedNFT) ? (
+                  {selectedNFT && processingNFT === getNFTId(selectedNFT) ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                       Updating...

@@ -469,6 +469,42 @@ export const listingQueries = {
       console.error('Error updating listing price:', error)
       throw error
     }
+  },
+
+  // Update bundle price for collections
+  async updateBundlePrice(listingId: string, newBundlePrice: string) {
+    try {
+      const result = await sql`
+        UPDATE listings 
+        SET bundle_price = ${newBundlePrice}, updated_at = CURRENT_TIMESTAMP
+        WHERE listing_id = ${listingId} AND is_bundle = true
+        RETURNING *
+      `
+      return result[0] || null
+    } catch (error) {
+      console.error('Error updating bundle price:', error)
+      throw error
+    }
+  },
+
+  // Smart update price - updates correct field based on is_bundle
+  async updatePriceSmart(listingId: string, newPrice: string) {
+    try {
+      // First get the listing to check if it's a bundle
+      const listing = await this.getListingById(listingId)
+      if (!listing) {
+        throw new Error('Listing not found')
+      }
+
+      if (listing.is_bundle) {
+        return await this.updateBundlePrice(listingId, newPrice)
+      } else {
+        return await this.updateListingPrice(listingId, newPrice)
+      }
+    } catch (error) {
+      console.error('Error updating price smart:', error)
+      throw error
+    }
   }
 }
 

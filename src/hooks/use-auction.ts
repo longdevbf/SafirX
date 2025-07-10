@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount, usePublicClient, useWalletClient, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther, formatEther,  Address } from 'viem'

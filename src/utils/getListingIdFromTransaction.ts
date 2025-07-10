@@ -46,11 +46,11 @@ export async function getListingIdFromTransaction(txHash: string): Promise<{
 
       console.log('🔍 Checking event:', eventName, 'args:', args)
 
-      // Check for single listing events
-      if (eventName === 'SingleListing') {
+      // Check for single NFT listing events
+      if (eventName === 'NFTListed') {
         const listingId = args?.listingId?.toString()
         if (listingId) {
-          console.log('✅ Found SingleListing event, listingId:', listingId)
+          console.log('✅ Found NFTListed event, listingId:', listingId)
           return { 
             listingId, 
             collectionId: null, 
@@ -59,11 +59,24 @@ export async function getListingIdFromTransaction(txHash: string): Promise<{
         }
       }
 
-      // Check for collection listing events
-      if (eventName === 'CollectionListing') {
+      // Check for collection bundle listing events
+      if (eventName === 'CollectionBundleListed') {
         const collectionId = args?.collectionId?.toString()
         if (collectionId) {
-          console.log('✅ Found CollectionListing event, collectionId:', collectionId)
+          console.log('✅ Found CollectionBundleListed event, collectionId:', collectionId)
+          return { 
+            listingId: null, 
+            collectionId, 
+            type: 'collection' 
+          }
+        }
+      }
+
+      // Check for collection individual listing events
+      if (eventName === 'CollectionIndividualListed') {
+        const collectionId = args?.collectionId?.toString()
+        if (collectionId) {
+          console.log('✅ Found CollectionIndividualListed event, collectionId:', collectionId)
           return { 
             listingId: null, 
             collectionId, 

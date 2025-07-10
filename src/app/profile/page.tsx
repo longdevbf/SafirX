@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
 import { useState, useEffect } from "react"
@@ -280,6 +282,8 @@ export default function ProfilePage() {
                 return
               }
               
+              console.log('📋 Collection data to sync:', collectionData)
+              
               // Get real listing/collection ID from transaction
               const { listingId, collectionId } = await getListingIdFromTransaction(marketHash)
               const realId = collectionId || listingId
@@ -289,28 +293,58 @@ export default function ProfilePage() {
                 return
               }
               
-              // Create collection in database
+              console.log('🆔 Real collection ID:', realId)
+              
+              // Get detailed NFT metadata for each selected NFT
+              const nftDetails = await Promise.all(
+                collectionData.tokenIds.map(async (tokenId, index) => {
+                  // Find the NFT in our current NFT list
+                  const nftFromList = nfts.find(n => 
+                    n.contractAddress === collectionData.nftContract && 
+                    n.tokenId === tokenId
+                  )
+                  
+                  const price = collectionData.listingType === 'bundle' ? 0 : 
+                              collectionData.listingType === 'same-price' ? parseFloat(collectionData.samePricePerItem || '0') :
+                              parseFloat(collectionData.individualPrices?.[index] || '0')
+                  
+                  return {
+                    listing_id: collectionData.listingType === 'bundle' ? realId : `${realId}-${tokenId}`,
+                    token_id: tokenId,
+                    price: price,
+                    nft_name: nftFromList?.name || `${collectionData.collectionName} #${tokenId}`,
+                    nft_description: nftFromList?.description || collectionData.collectionDescription || '',
+                    nft_image: nftFromList?.image || collectionData.collectionImage || '/placeholder-nft.jpg',
+                    nft_attributes: JSON.stringify(nftFromList?.attributes || []),
+                    nft_rarity: nftFromList?.rarity || 'Common'
+                  }
+                })
+              )
+              
+              console.log('📊 NFT details for database:', nftDetails)
+              
+              // Handle IPFS cover image URL (no file ID needed for IPFS)
+              const coverImageDriveId = '' // Not used for IPFS URLs
+              console.log('🖼️ Cover image URL (IPFS):', collectionData.collectionImage)
+              
+              // Create collection payload for unified listings table
               const collectionPayload = {
                 collection_id: realId,
                 name: collectionData.collectionName,
                 description: collectionData.collectionDescription || '',
-                cover_image: collectionData.collectionImage || '',
+                cover_image_url: collectionData.collectionImage || '',
+                cover_image_drive_id: coverImageDriveId,
                 creator_address: address || '',
                 contract_address: collectionData.nftContract,
                 is_bundle: collectionData.listingType === 'bundle',
-                bundle_price: collectionData.bundlePrice ? parseFloat(collectionData.bundlePrice) : undefined,
+                bundle_price: collectionData.bundlePrice ? parseFloat(collectionData.bundlePrice) : null,
                 listing_type: collectionData.listingType === 'bundle' ? 1 : collectionData.listingType === 'same-price' ? 2 : 0,
                 tx_hash: marketHash,
                 total_items: collectionData.tokenIds.length,
-                items: collectionData.tokenIds.map((tokenId, index) => ({
-                  listing_id: `${realId}-${tokenId}`,
-                  nft_contract: collectionData.nftContract,
-                  token_id: tokenId,
-                  price: collectionData.listingType === 'bundle' ? 0 : 
-                        collectionData.listingType === 'same-price' ? parseFloat(collectionData.samePricePerItem || '0') :
-                        parseFloat(collectionData.individualPrices?.[index] || '0')
-                }))
+                items: nftDetails
               }
+              
+              console.log('🚀 Sending collection payload to API:', collectionPayload)
               
               const response = await fetch('/api/collections', {
                 method: 'POST',
@@ -321,15 +355,39 @@ export default function ProfilePage() {
               })
               
               if (response.ok) {
-                console.log('✅ Collection synced to database successfully')
+                const result = await response.json()
+                console.log('✅ Collection synced to database successfully:', result)
+                
                 // Clear pending data
                 delete (window as any).pendingCollectionData
+                
+                toast({
+                  title: "💾 Collection Saved",
+                  description: `Successfully saved ${result.total_items} NFTs to marketplace database`,
+                  duration: 5000,
+                })
+                
               } else {
-                console.error('❌ Failed to sync collection to database')
+                const errorData = await response.json()
+                console.error('❌ Failed to sync collection to database:', errorData)
+                
+                toast({
+                  title: "⚠️ Database Sync Warning",
+                  description: "Collection was listed on blockchain but database sync failed. Contact support if needed.",
+                  variant: "destructive",
+                  duration: 10000,
+                })
               }
               
             } catch (error) {
               console.error('❌ Error syncing collection to database:', error)
+              
+              toast({
+                title: "⚠️ Database Sync Error",
+                description: "Collection was listed on blockchain but database sync failed. Contact support if needed.",
+                variant: "destructive",
+                duration: 10000,
+              })
             }
           }
           
@@ -518,7 +576,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           contractAddress,
           owner: address,
-          marketAddress: '0xd1DCE6BF2716310753Fc662B044D3233a9EFC3B4'
+          marketAddress: '0x8002ac81e5f35fA4C4a3972f021e317EC2fCa4fF'
         })
       })
 
@@ -725,7 +783,7 @@ export default function ProfilePage() {
             body: JSON.stringify({
               contractAddress: selectedNFT.contractAddress,
               owner: address,
-              marketAddress: '0xd1DCE6BF2716310753Fc662B044D323a9EFC3B4'
+              marketAddress: '0x8002ac81e5f35fA4C4a3972f021e317EC2fCa4fF'
             })
           })
 

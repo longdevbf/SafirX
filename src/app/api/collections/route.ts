@@ -1,9 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Pool } from 'pg'
+import { google } from 'googleapis'
+import { Readable } from 'stream'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 })
+
+// Google Drive setup
+let drive: any = null
+let driveInitialized = false
+
+try {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_DRIVE_CLIENT_EMAIL,
+      private_key: process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/drive.file'],
+  })
+
+  drive = google.drive({ version: 'v3', auth })
+  driveInitialized = true
+  console.log('✅ Google Drive initialized successfully')
+} catch (error) {
+  console.error('❌ Failed to initialize Google Drive:', error)
+  driveInitialized = false
+}
+
+async function uploadToGoogleDrive(file: File, fileName: string): Promise<string> {
+  try {
+    if (!driveInitialized || !drive) {
+      throw new Error('Google Drive not initialized. Check environment variables.')
+    }
+    
+    console.log('🔄 Starting Google Drive upload for:', fileName)
+    console.log('📁 File details:', { size: file.size, type: file.type, name: file.name })
+    
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const stream = Readable.from(buffer)
+    
+    console.log('📤 Creating file in Google Drive...')
+    const response = await drive.files.create({
+      requestBody: {
+        name: `collection_${fileName}_${Date.now()}.${file.name.split('.').pop()}`,
+        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
+      },
+      media: {
+        mimeType: file.type,
+        body: stream,
+      },
+    })
+
+    const fileId = response.data.id
+    
+    if (!fileId) {
+      throw new Error('Failed to get file ID from Google Drive response')
+    }
+    
+    console.log('✅ File created with ID:', fileId)
+    
+    // Make file publicly accessible
+    console.log('🔓 Setting file permissions...')
+    await drive.permissions.create({
+      fileId: fileId,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone',
+      },
+    })
+    
+    const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`
+    console.log('✅ Upload complete. Image URL:', imageUrl)
+
+    // Return direct image URL that works with Next.js Image component
+    return imageUrl
+  } catch (error) {
+    console.error('❌ Google Drive upload error:', error)
+    
+    if (error.message?.includes('403')) {
+      throw new Error('Google Drive access denied. Check API credentials and folder permissions.')
+    } else if (error.message?.includes('404')) {
+      throw new Error('Google Drive folder not found. Check GOOGLE_DRIVE_FOLDER_ID.')
+    } else if (error.message?.includes('not initialized')) {
+      throw new Error('Google Drive not properly configured. Check environment variables.')
+    } else {
+      throw new Error(`Google Drive upload failed: ${error.message}`)
+    }
+  }
+}
 
 // ✅ GET /api/collections - Get all collections with pagination
 export async function GET(request: NextRequest) {
@@ -91,106 +177,214 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ✅ POST /api/collections - Create new collection
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const {
-      collection_id,
-      name,
-      description,
-      cover_image,
-      banner_image,
-      creator_address,
-      contract_address,
-      is_bundle = false,
-      bundle_price,
-      listing_type = 0,
-      tx_hash,
-      block_number,
-      items = [] // Array of NFT items to add to collection
-    } = body
+    const contentType = request.headers.get('content-type')
     
-    // Validate required fields
-    if (!collection_id || !name || !creator_address || !contract_address) {
-      return NextResponse.json(
-        { error: 'Missing required fields: collection_id, name, creator_address, contract_address' },
-        { status: 400 }
-      )
-    }
-    
-    const client = await pool.connect()
-    
-    try {
-      await client.query('BEGIN')
+    if (contentType?.includes('multipart/form-data')) {
+      // Handle image upload with detailed error logging
+      console.log('🔄 Processing image upload...')
       
-      // Insert collection
-      const collectionQuery = `
-        INSERT INTO collections (
-          collection_id, name, description, cover_image, banner_image,
-          creator_address, contract_address, is_bundle, bundle_price,
-          listing_type, tx_hash, block_number, total_items
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        RETURNING *
-      `
-      
-      const collectionResult = await client.query(collectionQuery, [
-        collection_id, name, description, cover_image, banner_image,
-        creator_address, contract_address, is_bundle, bundle_price,
-        listing_type, tx_hash, block_number, items.length
-      ])
-      
-      const collection = collectionResult.rows[0]
-      
-      // Insert collection items if provided
-      if (items.length > 0) {
-        const itemsQuery = `
-          INSERT INTO collection_items (
-            collection_id, listing_id, nft_contract, token_id, price, position_in_collection
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-        `
-        
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i]
-          await client.query(itemsQuery, [
-            collection_id,
-            item.listing_id,
-            item.nft_contract,
-            item.token_id,
-            item.price,
-            i + 1 // position starts from 1
-          ])
-        }
+      // Check if Google Drive is initialized
+      if (!driveInitialized) {
+        console.error('❌ Google Drive not initialized')
+        return NextResponse.json({ 
+          error: 'Google Drive not configured properly.',
+          details: 'Check GOOGLE_DRIVE_CLIENT_EMAIL, GOOGLE_DRIVE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID environment variables.'
+        }, { status: 500 })
       }
       
-      await client.query('COMMIT')
+      const formData = await request.formData()
+      const file = formData.get('file') as File
       
-      return NextResponse.json({
-        success: true,
-        collection,
-        message: 'Collection created successfully'
+      if (!file) {
+        return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+      }
+      
+      console.log('📁 File details:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
       })
+
+      try {
+        const url = await uploadToGoogleDrive(file, 'collection_cover')
+        console.log('✅ Upload successful:', url)
+        return NextResponse.json({ url })
+      } catch (uploadError) {
+        console.error('❌ Google Drive upload failed:', uploadError)
+        
+        return NextResponse.json({ 
+          error: 'Failed to upload image to Google Drive',
+          details: uploadError.message
+        }, { status: 500 })
+      }
+    } else {
+      // Handle collection listing creation
+      const body = await request.json()
+      const {
+        collection_id,
+        name,
+        description,
+        cover_image_url,
+        cover_image_drive_id,
+        creator_address,
+        contract_address,
+        is_bundle,
+        bundle_price,
+        listing_type,
+        tx_hash,
+        total_items,
+        items // Array of NFT items with metadata
+      } = body
+
+      const client = await pool.connect()
       
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
+      try {
+        await client.query('BEGIN')
+        
+        // Insert each NFT as a separate listing in the unified listings table
+        for (const item of items) {
+          const {
+            listing_id,
+            token_id,
+            price,
+            nft_name,
+            nft_description,
+            nft_image,
+            nft_attributes,
+            nft_rarity
+          } = item
+
+          await client.query(`
+            INSERT INTO listings (
+              listing_id, 
+              nft_contract, 
+              token_id, 
+              seller, 
+              price, 
+              collection_name, 
+              name, 
+              description, 
+              category, 
+              image, 
+              attributes, 
+              rarity, 
+              is_bundle, 
+              bundle_token_ids, 
+              collection_image, 
+              tx_hash, 
+              is_active,
+              created_at,
+              cover_image_url,
+              cover_image_drive_id,
+              individual_images,
+              individual_metadata,
+              nft_names,
+              nft_descriptions,
+              token_ids_array,
+              individual_prices,
+              collection_type,
+              bundle_price,
+              individual_price,
+              metadata_synced,
+              parent_collection_id,
+              is_collection_item,
+              collection_position
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+            ON CONFLICT (listing_id) DO UPDATE SET
+              nft_contract = EXCLUDED.nft_contract,
+              token_id = EXCLUDED.token_id,
+              seller = EXCLUDED.seller,
+              price = EXCLUDED.price,
+              collection_name = EXCLUDED.collection_name,
+              name = EXCLUDED.name,
+              description = EXCLUDED.description,
+              category = EXCLUDED.category,
+              image = EXCLUDED.image,
+              attributes = EXCLUDED.attributes,
+              rarity = EXCLUDED.rarity,
+              is_bundle = EXCLUDED.is_bundle,
+              bundle_token_ids = EXCLUDED.bundle_token_ids,
+              collection_image = EXCLUDED.collection_image,
+              tx_hash = EXCLUDED.tx_hash,
+              is_active = EXCLUDED.is_active,
+              cover_image_url = EXCLUDED.cover_image_url,
+              cover_image_drive_id = EXCLUDED.cover_image_drive_id,
+              individual_images = EXCLUDED.individual_images,
+              individual_metadata = EXCLUDED.individual_metadata,
+              nft_names = EXCLUDED.nft_names,
+              nft_descriptions = EXCLUDED.nft_descriptions,
+              token_ids_array = EXCLUDED.token_ids_array,
+              individual_prices = EXCLUDED.individual_prices,
+              collection_type = EXCLUDED.collection_type,
+              bundle_price = EXCLUDED.bundle_price,
+              individual_price = EXCLUDED.individual_price,
+              metadata_synced = EXCLUDED.metadata_synced,
+              parent_collection_id = EXCLUDED.parent_collection_id,
+              is_collection_item = EXCLUDED.is_collection_item,
+              collection_position = EXCLUDED.collection_position,
+              updated_at = NOW()
+          `, [
+            listing_id,
+            contract_address,
+            token_id,
+            creator_address,
+            price.toString(),
+            name,
+            nft_name || `${name} #${token_id}`,
+            nft_description || description,
+            'Collection',
+            nft_image || cover_image_url,
+            nft_attributes || '[]',
+            nft_rarity || 'Common',
+            is_bundle,
+            is_bundle ? items.map(i => i.token_id).join(',') : token_id,
+            cover_image_url || '',
+            tx_hash,
+            true,
+            new Date().toISOString(),
+            cover_image_url || '',
+            cover_image_drive_id || '',
+            JSON.stringify(items.map(i => i.nft_image || cover_image_url)),
+            JSON.stringify(items.map(i => ({ 
+              name: i.nft_name, 
+              description: i.nft_description, 
+              attributes: i.nft_attributes 
+            }))),
+            JSON.stringify(items.map(i => i.nft_name)),
+            JSON.stringify(items.map(i => i.nft_description)),
+            JSON.stringify(items.map(i => i.token_id)),
+            JSON.stringify(items.map(i => i.price.toString())),
+            is_bundle ? 'bundle' : (listing_type === 2 ? 'same-price' : 'individual'),
+            bundle_price ? bundle_price.toString() : null,
+            is_bundle ? null : price.toString(),
+            true, // metadata_synced
+            is_bundle ? null : collection_id, // parent_collection_id
+            !is_bundle, // is_collection_item
+            is_bundle ? null : items.findIndex(i => i.token_id === token_id) + 1 // collection_position
+          ])
+        }
+        
+        await client.query('COMMIT')
+        
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Collection saved to database successfully',
+          total_items: items.length 
+        })
+        
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
     }
-    
   } catch (error) {
-    console.error('Error creating collection:', error)
-    
-    // Handle duplicate collection_id
-    if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
-      return NextResponse.json(
-        { error: 'Collection with this ID already exists' },
-        { status: 409 }
-      )
-    }
-    
+    console.error('Collections API Error:', error)
     return NextResponse.json(
-      { error: 'Failed to create collection' },
+      { error: 'Failed to process collection request', details: error.message },
       { status: 500 }
     )
   }

@@ -652,7 +652,7 @@ export function useAllAuctions() {
                 maxRetries: 2,
                 delayMs: 500,
                 onRetry: (attempt) => {
-                  console.log(`🔄 Retrying auction ${auctionId} (attempt ${attempt}/2)`)
+            //      console.log(`🔄 Retrying auction ${auctionId} (attempt ${attempt}/2)`)
                 }
               }
             ).then((result) => {
@@ -660,11 +660,11 @@ export function useAllAuctions() {
               // If auction exists (has a seller), add to list
               if (auctionData.seller !== '0x0000000000000000000000000000000000000000') {
                 allAuctionIds.add(auctionId)
-                console.log(`✅ Found additional auction ${auctionId} (state: ${auctionData.state})`)
+             //   console.log(`✅ Found additional auction ${auctionId} (state: ${auctionData.state})`)
               }
             }).catch((error) => {
               // Auction doesn't exist or network error, ignore
-              console.log(`⚠️ Auction ${auctionId} not found or network error:`, error.message)
+            //  console.log(`⚠️ Auction ${auctionId} not found or network error:`, error.message)
             })
             
             batchPromises.push(promise)
@@ -718,7 +718,7 @@ export function useAllAuctions() {
       }
       
       // Step 3: Fetch detailed data for all found auctions
-      console.log('📥 Fetching detailed auction data...')
+    //  console.log('📥 Fetching detailed auction data...')
       const auctionPromises = finalAuctionIds.map(async (id) => {
         try {
           // Add timeout and retry for individual auction calls

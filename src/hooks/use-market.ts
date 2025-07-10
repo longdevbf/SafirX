@@ -281,7 +281,7 @@ export function useMarketplaceNFTs() {
         return
       }
 
-      console.log('🔄 Processing marketplace data:', allAvailableIds.length, 'items', 'trigger:', refreshTrigger)
+    //  console.log('🔄 Processing marketplace data:', allAvailableIds.length, 'items', 'trigger:', refreshTrigger)
       setLoading(true)
       setError(null)
 
@@ -406,7 +406,7 @@ export function useMarketplaceNFTs() {
 
   // ✅ FIXED: Proper refetch function using wagmi refetch
   const refetch = useCallback(async () => {
-    console.log('🔄 Manual refresh triggered')
+   // console.log('🔄 Manual refresh triggered')
     setLoading(true)
     
     try {
@@ -491,7 +491,7 @@ export function useCollectionDetail(collectionId?: string) {
         args: [BigInt(tokenId)],
       })
 
-      console.log(`📄 Token URI for ${tokenId}:`, tokenURI)
+    //  console.log(`📄 Token URI for ${tokenId}:`, tokenURI)
 
       if (!tokenURI) {
         console.log(`⚠️ No tokenURI for ${tokenId}, using fallback`)
@@ -585,7 +585,7 @@ export function useCollectionDetail(collectionId?: string) {
 
           for (let i = 0; i < itemIds.length; i++) {
             const tokenId = itemIds[i]
-            console.log(`🔄 Processing item ${i + 1}/${itemIds.length}: Token ID ${tokenId}`)
+        //    console.log(`🔄 Processing item ${i + 1}/${itemIds.length}: Token ID ${tokenId}`)
             
             try {
               const metadata = await fetchNFTMetadata(collection.nftContract, tokenId.toString())
@@ -616,7 +616,7 @@ export function useCollectionDetail(collectionId?: string) {
               }
 
               processedItems.push(item)
-              console.log(`✅ Processed item ${i + 1}: ${item.name}`)
+       //       console.log(`✅ Processed item ${i + 1}: ${item.name}`)
             } catch (itemError) {
               console.warn(`❌ Error processing item ${tokenId}:`, itemError)
               
@@ -650,16 +650,16 @@ export function useCollectionDetail(collectionId?: string) {
             }
           }
 
-          console.log(`✅ Processed ${processedItems.length} collection items successfully`)
+        //  console.log(`✅ Processed ${processedItems.length} collection items successfully`)
           setCollectionItems(processedItems)
         } 
         // ✅ Method 2: Enhanced fallback to bundle data
         else {
-          console.log('🔄 Direct collection data not available, trying fallback methods...')
+       //   console.log('🔄 Direct collection data not available, trying fallback methods...')
           
           // First try: Direct listing info
           try {
-            console.log(`🔍 Trying getListingInfo for ID: ${collectionId}`)
+       //     console.log(`🔍 Trying getListingInfo for ID: ${collectionId}`)
             const listingInfo = await getListingDataSafe(BigInt(collectionId))
             
             if (listingInfo && listingInfo.isBundle && listingInfo.tokenIds && listingInfo.tokenIds.length > 0) {
@@ -676,7 +676,7 @@ export function useCollectionDetail(collectionId?: string) {
               
               for (let i = 0; i < listingInfo.tokenIds.length; i++) {
                 const tokenId = listingInfo.tokenIds[i]
-                console.log(`🔄 Processing fallback item ${i + 1}/${listingInfo.tokenIds.length}: Token ID ${tokenId}`)
+           //     console.log(`🔄 Processing fallback item ${i + 1}/${listingInfo.tokenIds.length}: Token ID ${tokenId}`)
                 
                 try {
                   const metadata = await fetchNFTMetadata(listingInfo.nftContract, tokenId.toString())
@@ -705,7 +705,7 @@ export function useCollectionDetail(collectionId?: string) {
                   }
 
                   processedItems.push(item)
-                  console.log(`✅ Processed fallback item ${i + 1}: ${item.name}`)
+          //        console.log(`✅ Processed fallback item ${i + 1}: ${item.name}`)
                 } catch (itemError) {
                   console.warn(`❌ Error processing fallback item ${tokenId}:`, itemError)
                   
@@ -737,16 +737,16 @@ export function useCollectionDetail(collectionId?: string) {
                 }
               }
               
-              console.log(`✅ Processed ${processedItems.length} fallback items successfully`)
+        //      console.log(`✅ Processed ${processedItems.length} fallback items successfully`)
               setCollectionItems(processedItems)
             } else {
               console.warn('❌ No valid bundle data found in getListingInfo')
-              console.log('📊 getListingInfo result:', listingInfo)
+          //    console.log('📊 getListingInfo result:', listingInfo)
               
               // Last resort: Create placeholder items if we know it's a bundle
               if (collectionData) {
                 const collection = collectionData as ContractCollectionListing
-                console.log('🔧 Creating placeholder items based on collection data')
+              //  console.log('🔧 Creating placeholder items based on collection data')
                 
                 const placeholderItems: ProcessedNFT[] = []
                 const itemCount = Number(collection.totalItems) || 1
@@ -778,7 +778,7 @@ export function useCollectionDetail(collectionId?: string) {
                   placeholderItems.push(placeholderItem)
                 }
                 
-                console.log(`✅ Created ${placeholderItems.length} placeholder items`)
+        //        console.log(`✅ Created ${placeholderItems.length} placeholder items`)
                 setCollectionItems(placeholderItems)
               } else {
                 setError('Collection not found or has no items')

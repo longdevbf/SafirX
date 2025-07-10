@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useAuction } from "@/context/auctionContext"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ConnectWallet } from "@/components/ConnectWallet"
 import { useWallet } from "@/context/walletContext"
@@ -33,7 +32,6 @@ import {
   
   Copy,
 } from "lucide-react"
-import { useMarketplace } from "@/context/marketplaceContext"
 export default function Header() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   //const { loading: isLoading, nfts } = useMarketplace()

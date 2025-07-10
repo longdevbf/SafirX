@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { X, Package, AlertCircle, Loader2, Upload, ImageIcon } from "lucide-react"
 import { ProcessedNFT } from "@/interfaces/nft"
 import Image from "next/image"
+import { UploadService } from "@/services/pinata"
 
 interface CollectionSelectorProps {
   nfts: ProcessedNFT[]
@@ -28,7 +30,7 @@ export interface CollectionSellData {
   individualPrices?: string[]
   samePricePerItem?: string
   collectionName: string
-  collectionImage?: string
+  collectionImage?: string // IPFS URL
   collectionDescription?: string
 }
 
@@ -42,6 +44,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
   const [collectionImage, setCollectionImage] = useState("")
   const [collectionDescription, setCollectionDescription] = useState("")
   const [uploading, setUploading] = useState(false)
+  const [selectedCoverImage, setSelectedCoverImage] = useState<File | null>(null)
 
   // Group NFTs by contract address
   const nftsByContract = nfts.reduce((acc, nft) => {
@@ -96,28 +99,32 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
     }))
   }
 
-  // Handle image upload
-  const handleImageUpload = async (file: File) => {
+  // Handle cover image upload - hiển thị ảnh ngay, upload IPFS sau
+  const handleCoverImageUpload = async (file: File) => {
     try {
+      // 1. Hiển thị ảnh ngay lập tức từ local preview
+      const localPreview = URL.createObjectURL(file)
+      setCollectionImage(localPreview) // Hiển thị ảnh ngay
+      
       setUploading(true)
+      console.log('📤 Uploading cover image to IPFS...')
       
-      const formData = new FormData()
-      formData.append('file', file)
+      // 2. Upload lên IPFS trong background
+      const ipfsUrl = await UploadService.uploadFileToIPFS(file)
+      console.log('✅ Cover image uploaded to IPFS:', ipfsUrl)
       
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      })
+      // 3. Cập nhật với IPFS URL thật sự
+      setCollectionImage(ipfsUrl)
       
-      if (response.ok) {
-        const data = await response.json()
-        setCollectionImage(data.url)
-      } else {
-        throw new Error('Upload failed')
-      }
+      // Clean up local preview
+      URL.revokeObjectURL(localPreview)
+      
     } catch (error) {
-      console.error('Upload error:', error)
-      alert('Failed to upload image')
+      console.error('❌ Upload error:', error)
+      alert('Failed to upload cover image to IPFS. Please try again.')
+      
+      // Reset về empty nếu upload fail
+      setCollectionImage('')
     } finally {
       setUploading(false)
     }
@@ -206,7 +213,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
 
                 <div>
                   <Label htmlFor="collection-description">Collection Description</Label>
-                  <Input
+                  <Textarea
                     id="collection-description"
                     placeholder="Describe your collection (optional)"
                     value={collectionDescription}
@@ -224,14 +231,15 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                             src={collectionImage}
                             alt="Collection cover"
                             fill
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                             className="object-cover rounded"
                           />
                         </div>
                       ) : (
                         <ImageIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                       )}
-                      <Button
-                        variant="outline"
+                      <Button 
+                        variant="outline" 
                         disabled={uploading}
                         onClick={() => document.getElementById('collection-image-upload')?.click()}
                         className="w-full"
@@ -239,12 +247,12 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                         {uploading ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Uploading...
+                            Uploading to IPFS...
                           </>
                         ) : (
                           <>
                             <Upload className="w-4 h-4 mr-2" />
-                            {collectionImage ? 'Change Image' : 'Upload Image'}
+                            {collectionImage ? 'Change Cover Image' : 'Upload Cover Image'}
                           </>
                         )}
                       </Button>
@@ -255,13 +263,16 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0]
-                          if (file) handleImageUpload(file)
+                          if (file) {
+                            setSelectedCoverImage(file)
+                            handleCoverImageUpload(file)
+                          }
                         }}
                       />
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Upload a cover image for your collection. This will be shown in the marketplace.
+                    Upload a cover image for your collection. This will be stored on IPFS and shown in the marketplace.
                   </p>
                 </div>
 
@@ -335,8 +346,8 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                           <Badge variant="outline">
                             {selectedFromContract}/{contractNFTs.length} selected
                           </Badge>
-                          <Button
-                            variant="outline"
+                          <Button 
+                            variant="outline" 
                             size="sm"
                             onClick={() => handleSelectAllFromContract(contractAddress)}
                           >
@@ -360,6 +371,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                                     src={nft.image || "/assets/nft.jpg"}
                                     alt={nft.name}
                                     fill
+                                    sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                                     className="object-cover"
                                   />
                                   <div className="absolute top-2 left-2">
@@ -373,6 +385,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                                 <div className="p-2">
                                   <p className="text-sm font-medium truncate">{nft.name}</p>
                                   <p className="text-xs text-muted-foreground">#{nft.tokenId}</p>
+                                  <p className="text-xs text-blue-600">IPFS: {nft.image ? '✅' : '❌'}</p>
                                 </div>
                               </div>
 
@@ -405,7 +418,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
             <div className="text-sm text-muted-foreground">
               {selectedNFTs.length > 0 && (
                 <span>
-                  {selectedNFTs.length} NFTs selected
+                  {selectedNFTs.length} NFTs selected • Cover Image: {collectionImage ? 'IPFS ✅' : 'Not uploaded'}
                   {listingType === 'bundle' && bundlePrice && (
                     <span> • Bundle: {bundlePrice} ROSE</span>
                   )}

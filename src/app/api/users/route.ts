@@ -177,6 +177,46 @@ export async function POST(request: NextRequest) {
     console.log('POST /api/users called')
     
     const formData = await request.formData()
+    const uploadType = formData.get('uploadType') as string
+    
+    // Handle collection image upload separately
+    if (uploadType === 'collection') {
+      console.log('🖼️ Handling collection image upload...')
+      
+      const collectionImage = formData.get('collectionImage') as File | null
+      
+      if (!collectionImage) {
+        return NextResponse.json({ error: 'No collection image provided' }, { status: 400 })
+      }
+      
+      if (driveConfigured) {
+        try {
+          console.log('📤 Uploading collection image to Google Drive...')
+          const imageUrl = await uploadToGoogleDrive(collectionImage, `collection_cover`, false)
+          console.log('✅ Collection image uploaded:', imageUrl)
+          
+          return NextResponse.json({ 
+            collection_image: imageUrl,
+            success: true 
+          })
+        } catch (error) {
+          console.error('❌ Failed to upload collection image:', error)
+          return NextResponse.json({ 
+            error: 'Failed to upload collection image',
+            details: error.message 
+          }, { status: 500 })
+        }
+      } else {
+        console.log('⚠️ Google Drive not configured, using placeholder')
+        const placeholderUrl = `https://via.placeholder.com/800x400/6366f1/ffffff?text=Collection+${Date.now()}`
+        return NextResponse.json({ 
+          collection_image: placeholderUrl,
+          success: true 
+        })
+      }
+    }
+    
+    // Original user profile logic continues below...
     const address = formData.get('address') as string
     const name = formData.get('name') as string
     const description = formData.get('description') as string

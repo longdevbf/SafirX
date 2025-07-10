@@ -17,24 +17,29 @@ export class UploadService {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/upload', {
+      const response = await fetch('/api/upload-ipfs', {
         method: 'POST',
         body: formData,
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error('Upload API response:', response.status, errorData)
-        throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
+        console.error('IPFS upload API response:', response.status, errorData)
+        throw new Error(`IPFS upload failed: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log('File upload successful:', data)
-      return data.ipfsUrl
+      console.log('IPFS upload successful:', data)
+      return data.ipfsUrl // API trả về IPFS URL thật sự
     } catch (error) {
-      console.error('Upload error:', error)
+      console.error('IPFS upload error:', error)
       throw error
     }
+  }
+
+  // Public method để upload file lên IPFS
+  static async uploadFileToIPFS(file: File): Promise<string> {
+    return this.uploadToPinata(file)
   }
 
   private static async uploadMetadata(metadata: NFTMetadata): Promise<string> {

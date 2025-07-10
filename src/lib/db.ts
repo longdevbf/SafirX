@@ -185,20 +185,48 @@ export const listingQueries = {
     bundle_token_ids?: string
     collection_image?: string
     tx_hash: string
+    // Enhanced fields
+    cover_image_url?: string
+    cover_image_drive_id?: string
+    individual_images?: string
+    individual_metadata?: string
+    nft_names?: string
+    nft_descriptions?: string
+    token_ids_array?: string
+    individual_prices?: string
+    collection_type?: string
+    bundle_price?: string
+    individual_price?: string
+    metadata_synced?: boolean
+    parent_collection_id?: string
+    is_collection_item?: boolean
+    collection_position?: number
   }) {
     try {
       const result = await sql`
         INSERT INTO listings (
           listing_id, nft_contract, token_id, seller, price, collection_name,
           name, description, category, image, attributes, rarity, is_bundle,
-          bundle_token_ids, collection_image, tx_hash, likes_count, views_count
+          bundle_token_ids, collection_image, tx_hash, likes_count, views_count,
+          cover_image_url, cover_image_drive_id, individual_images, individual_metadata,
+          nft_names, nft_descriptions, token_ids_array, individual_prices,
+          collection_type, bundle_price, individual_price, metadata_synced,
+          parent_collection_id, is_collection_item, collection_position
         ) VALUES (
           ${listingData.listing_id}, ${listingData.nft_contract}, ${listingData.token_id},
           ${listingData.seller}, ${listingData.price}, ${listingData.collection_name || ''},
           ${listingData.name}, ${listingData.description || ''}, ${listingData.category || ''},
           ${listingData.image}, ${listingData.attributes || ''}, ${listingData.rarity || 'Common'},
-          ${listingData.is_bundle}, ${listingData.bundle_token_ids || ''}, ${listingData.collection_image || ''},
-          ${listingData.tx_hash}, 0, 0
+          ${listingData.is_bundle}, ${listingData.bundle_token_ids || ''}, 
+          ${listingData.collection_image || ''}, ${listingData.tx_hash}, 0, 0,
+          ${listingData.cover_image_url || ''}, ${listingData.cover_image_drive_id || ''},
+          ${listingData.individual_images || ''}, ${listingData.individual_metadata || ''},
+          ${listingData.nft_names || ''}, ${listingData.nft_descriptions || ''},
+          ${listingData.token_ids_array || ''}, ${listingData.individual_prices || ''},
+          ${listingData.collection_type || 'single'}, ${listingData.bundle_price || ''},
+          ${listingData.individual_price || ''}, ${listingData.metadata_synced || true},
+          ${listingData.parent_collection_id || ''}, ${listingData.is_collection_item || false},
+          ${listingData.collection_position || 0}
         ) RETURNING *
       `
       return result[0]

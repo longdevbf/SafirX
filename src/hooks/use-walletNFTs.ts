@@ -63,13 +63,13 @@ export function useWalletNFTs() {
     // Create truly unique ID
     const uniqueId = `${contractAddress}-${tokenId}-${index}`;
     
-    console.log('Processing NFT:', {
-      name: nft.name,
-      id: nft.id,
-      contractAddress,
-      tokenName: nft.token?.name,
-      tokenSymbol: nft.token?.symbol
-    });
+    // console.log('Processing NFT:', {
+    //   name: nft.name,
+    //   id: nft.id,
+    //   contractAddress,
+    //   tokenName: nft.token?.name,
+    //   tokenSymbol: nft.token?.symbol
+    // });
     
     // Image is directly available
     let image = nft.image;

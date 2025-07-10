@@ -79,7 +79,7 @@ export default function CollectionManager({
       const formData = new FormData()
       formData.append('file', file)
       
-      const response = await fetch('/api/upload', {
+      const response = await fetch('/api/upload-ipfs', {
         method: 'POST',
         body: formData
       })
@@ -88,21 +88,22 @@ export default function CollectionManager({
         const data = await response.json()
         setFormData(prev => ({
           ...prev,
-          [type === 'cover' ? 'cover_image' : 'banner_image']: data.url
+          [type === 'cover' ? 'cover_image' : 'banner_image']: data.ipfsUrl
         }))
         
         toast({
           title: "Success",
-          description: `${type === 'cover' ? 'Cover' : 'Banner'} image uploaded successfully`
+          description: `${type === 'cover' ? 'Cover' : 'Banner'} image uploaded to IPFS successfully`
         })
       } else {
-        throw new Error('Upload failed')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Upload failed')
       }
     } catch (error) {
       console.error('Upload error:', error)
       toast({
         title: "Error",
-        description: "Failed to upload image",
+        description: "Failed to upload image to IPFS",
         variant: "destructive"
       })
     } finally {

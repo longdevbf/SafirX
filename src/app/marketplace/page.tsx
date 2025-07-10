@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Pagination } from "@/components/ui/pagination"
 import { 
   Search, Filter, Grid3X3, List, Heart, Eye, Star, Edit, AlertCircle, 
   RefreshCw, Loader2, ShoppingCart, Tag, X, Package, ArrowLeft, Users
@@ -71,6 +72,10 @@ export default function MarketplacePage() {
   const [selectedCollection, setSelectedCollection] = useState<string[]>([])
   const [selectedRarity, setSelectedRarity] = useState<string[]>([])
   const [sortBy, setSortBy] = useState("recent")
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
   
   const [selectedNFT, setSelectedNFT] = useState<ProcessedNFT | null>(null)
   const [newPrice, setNewPrice] = useState("")
@@ -269,6 +274,28 @@ export default function MarketplacePage() {
         }
       })
   }, [filteredByTab, searchQuery, selectedCollection, selectedRarity, stablePriceRange, sortBy])
+
+  // ✅ Pagination logic
+  const { paginatedNFTs, totalPages } = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    
+    return {
+      paginatedNFTs: filteredNFTs.slice(startIndex, endIndex),
+      totalPages: Math.ceil(filteredNFTs.length / itemsPerPage)
+    }
+  }, [filteredNFTs, currentPage, itemsPerPage])
+
+  // ✅ Handle page change
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  // ✅ Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedTab, searchQuery, selectedCollection, selectedRarity, sortBy, stablePriceRange])
 
   // ✅ FIXED: Handle collection filter with proper typing
   const handleCollectionFilter = useCallback((collection: string, checked: boolean) => {
@@ -1147,7 +1174,8 @@ export default function MarketplacePage() {
 
                 <div className="flex items-center gap-2">
                   <p className="text-muted-foreground text-sm">
-                    Showing {filteredNFTs.length} results
+                    Showing {paginatedNFTs.length} of {filteredNFTs.length} results
+                    {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
                   </p>
                   <Select value={sortBy} onValueChange={(value) => setSortBy(value)}>
                     <SelectTrigger className="w-48">
@@ -1216,7 +1244,7 @@ export default function MarketplacePage() {
                       ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
                       : "grid-cols-1"
                   }`}>
-                    {filteredNFTs.map((nft) => (
+                    {paginatedNFTs.map((nft) => (
                       <Card key={nft.id} className="overflow-hidden hover:shadow-lg transition-shadow group">
                         <div 
                           className={`${
@@ -1419,6 +1447,15 @@ export default function MarketplacePage() {
                       </Card>
                     ))}
                   </div>
+                )}
+                
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                  />
                 )}
               </TabsContent>
             </Tabs>

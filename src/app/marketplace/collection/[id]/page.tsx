@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
@@ -65,14 +66,16 @@ export default function CollectionDetailPage() {
     router.back()
   }
 
-  // Helper functions
-  const isOwner = useCallback((nft: ProcessedNFT) => {
-    return address && nft.seller && 
+  // Helper functions - Add type for collection data
+  type CollectionOrNFT = ProcessedNFT | { id: string; seller: string; isBundle?: boolean; [key: string]: unknown }
+
+  const isOwner = useCallback((nft: CollectionOrNFT) => {
+    return address && nft?.seller && 
            nft.seller.toLowerCase() === address.toLowerCase()
   }, [address])
 
-  const isProcessing = useCallback((nft: ProcessedNFT) => {
-    return processingNFT === nft.id
+  const isProcessing = useCallback((nft: CollectionOrNFT) => {
+    return processingNFT === nft?.id
   }, [processingNFT])
 
   // Handle purchase
@@ -180,10 +183,10 @@ export default function CollectionDetailPage() {
       const handleDatabaseUpdate = async () => {
         try {
           // Update database after successful blockchain transaction
-          const processingItem = collectionItems.find(item => item.id === processingNFT)
+          const processingItem = collectionItems.find(item => item.id === processingNFT) || collectionData
           if (!processingItem) return
 
-          if (processingItem.isBundle) {
+          if (processingItem.isBundle || (collectionData && collectionData.isBundle)) {
             // Handle bundle transaction
             if (newPrice) {
               await updateNFTPrice(processingItem.collectionId || processingItem.id, newPrice)
@@ -238,7 +241,7 @@ export default function CollectionDetailPage() {
       
       handleDatabaseUpdate()
     }
-  }, [isConfirmed, hash, processingNFT, collectionItems, updateNFTPrice, buyNFT, cancelNFTListing, toast, address, newPrice])
+  }, [isConfirmed, hash, processingNFT, collectionItems, updateNFTPrice, buyNFT, toast, address, newPrice])
 
   // Loading state
   if (loadingCollection) {
@@ -346,14 +349,14 @@ export default function CollectionDetailPage() {
                 
                 {/* Action Buttons */}
                 <div className="flex gap-3">
-                  {isOwner(collectionData) ? (
+                  {isOwner(collectionData as any) ? (
                     <>
                       <Button
                         onClick={() => setIsEditDialogOpen(true)}
-                        disabled={isProcessing(collectionData)}
+                        disabled={isProcessing(collectionData as any)}
                         className="flex-1"
                       >
-                        {isProcessing(collectionData) ? (
+                        {isProcessing(collectionData as any) ? (
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         ) : (
                           <Edit className="w-4 h-4 mr-2" />
@@ -362,11 +365,11 @@ export default function CollectionDetailPage() {
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => handleCancelListing(collectionData)}
-                        disabled={isProcessing(collectionData)}
+                        onClick={() => handleCancelListing(collectionData as any)}
+                        disabled={isProcessing(collectionData as any)}
                         className="flex-1"
                       >
-                        {isProcessing(collectionData) ? (
+                        {isProcessing(collectionData as any) ? (
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         ) : (
                           <X className="w-4 h-4 mr-2" />
@@ -376,12 +379,12 @@ export default function CollectionDetailPage() {
                     </>
                   ) : (
                     <Button
-                      onClick={() => handlePurchase(collectionData)}
-                      disabled={isProcessing(collectionData) || !collectionData.canPurchase}
+                      onClick={() => handlePurchase(collectionData as any)}
+                      disabled={isProcessing(collectionData as any) || !collectionData.canPurchase}
                       className="flex-1"
                       size="lg"
                     >
-                      {isProcessing(collectionData) ? (
+                      {isProcessing(collectionData as any) ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       ) : (
                         <ShoppingCart className="w-4 h-4 mr-2" />
@@ -479,7 +482,7 @@ export default function CollectionDetailPage() {
                 Cancel
               </Button>
               <Button
-                onClick={() => handleUpdatePrice(collectionData)}
+                onClick={() => handleUpdatePrice(collectionData as any)}
                 disabled={!newPrice || isPending}
               >
                 {isPending ? (

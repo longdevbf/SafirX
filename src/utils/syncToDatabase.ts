@@ -42,6 +42,7 @@ interface SyncAuctionData {
   seller: string
   starting_price: string
   reserve_price: string
+  min_bid_increment: string
   end_time: Date
   collection_name?: string
   name: string
@@ -52,6 +53,7 @@ interface SyncAuctionData {
   is_collection?: boolean
   collection_token_ids?: string[]
   collection_image?: string
+  allow_public_reveal?: boolean
   tx_hash: string
 }
 
@@ -114,12 +116,50 @@ export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<bool
   try {
     console.log('🔄 Syncing auction to database:', data.auction_id)
     
+    // Transform data to match API expectations
+    const apiData = {
+      action: 'create',
+      auctionId: parseInt(data.auction_id),
+      auctionType: data.is_collection ? 'COLLECTION' : 'SINGLE_NFT',
+      title: data.name,
+      description: data.description,
+      sellerAddress: data.seller,
+      nftContract: data.nft_contract,
+      tokenId: data.token_id ? parseInt(data.token_id) : undefined,
+      tokenIds: data.collection_token_ids?.map(id => parseInt(id)),
+      nftCount: data.is_collection ? data.collection_token_ids?.length : 1,
+      collectionImageUrl: data.collection_image,
+      startingPrice: data.starting_price,
+      reservePrice: data.reserve_price,
+      minBidIncrement: data.min_bid_increment,
+      startTime: Math.floor(Date.now() / 1000),
+      endTime: Math.floor(data.end_time.getTime() / 1000),
+      durationHours: Math.floor((data.end_time.getTime() - Date.now()) / (1000 * 60 * 60)),
+      allowPublicReveal: data.allow_public_reveal || false,
+      nftMetadata: {
+        name: data.name,
+        description: data.description,
+        image: data.image,
+        attributes: data.attributes,
+        collectionName: data.collection_name
+      },
+      creationTxHash: data.tx_hash
+    }
+    
+    console.log('📊 Syncing auction with transformed data:', {
+      auctionId: apiData.auctionId,
+      auctionType: apiData.auctionType,
+      title: apiData.title,
+      nftCount: apiData.nftCount,
+      tokenIds: apiData.tokenIds?.length || 0
+    })
+    
     const response = await fetch('/api/auctions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(apiData),
     })
 
     if (!response.ok) {
@@ -129,7 +169,7 @@ export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<bool
     }
 
     const result = await response.json()
-    console.log('✅ Successfully synced auction to database:', result.auction.auction_id)
+    console.log('✅ Successfully synced auction to database:', result.auction?.auction_id || apiData.auctionId)
     return true
   } catch (error) {
     console.error('❌ Error syncing auction to database:', error)
@@ -229,11 +269,21 @@ export function prepareListingData(
 export function prepareAuctionData(
   auctionId: string,
   nftContract: string,
-  tokenId: string,
+  tokenId: string | null,
+  collectionTokenIds: string[] | null,
   seller: string,
-  startingPrice: string,
-  reservePrice: string,
-  endTime: Date,
+  auctionParams: {
+    auctionType: 'SINGLE_NFT' | 'COLLECTION'
+    title: string
+    description: string
+    startingPrice: string
+    reservePrice: string
+    minBidIncrement: string
+    durationHours: number
+    allowPublicReveal: boolean
+    collectionImage?: string
+    collectionImageDriveId?: string
+  },
   txHash: string,
   nftData: {
     name: string
@@ -242,28 +292,30 @@ export function prepareAuctionData(
     image: string
     attributes?: any[]
     collectionName?: string
-    collectionImage?: string
-  },
-  isCollection: boolean = false,
-  collectionTokenIds?: string[]
+  }
 ): SyncAuctionData {
+  const endTime = new Date(Date.now() + (auctionParams.durationHours * 60 * 60 * 1000))
+  const isCollection = auctionParams.auctionType === 'COLLECTION'
+  
   return {
     auction_id: auctionId,
     nft_contract: nftContract,
-    token_id: tokenId,
+    token_id: tokenId || '',
     seller: seller,
-    starting_price: startingPrice,
-    reserve_price: reservePrice,
+    starting_price: auctionParams.startingPrice,
+    reserve_price: auctionParams.reservePrice,
+    min_bid_increment: auctionParams.minBidIncrement,
     end_time: endTime,
-    collection_name: nftData.collectionName || '',
-    name: nftData.name,
-    description: nftData.description || '',
+    collection_name: nftData.collectionName || nftData.name || '',
+    name: auctionParams.title,
+    description: auctionParams.description,
     category: nftData.category || '',
-    image: nftData.image,
+    image: auctionParams.collectionImage || nftData.image,
     attributes: nftData.attributes || [],
     is_collection: isCollection,
     collection_token_ids: collectionTokenIds || [],
-    collection_image: nftData.collectionImage || '',
+    collection_image: auctionParams.collectionImage || nftData.image,
+    allow_public_reveal: auctionParams.allowPublicReveal,
     tx_hash: txHash
   }
 }

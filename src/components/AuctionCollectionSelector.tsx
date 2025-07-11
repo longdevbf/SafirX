@@ -173,10 +173,14 @@ export default function AuctionCollectionSelector({
       formData.append('type', 'collection')
       formData.append('name', `collection_${Date.now()}_${collectionName.replace(/\s+/g, '_')}`)
 
-      const response = await fetch('/api/upload', {
+      const response = await fetch('/api/upload-ipfs', {
         method: 'POST',
         body: formData
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
       const result = await response.json()
 

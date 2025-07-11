@@ -1117,7 +1117,8 @@ export default function ProfilePage() {
                 name: selectedAuctionNFT.name,
                 description: selectedAuctionNFT.description,
                 image: selectedAuctionNFT.image,
-                attributes: selectedAuctionNFT.attributes
+                attributes: selectedAuctionNFT.attributes,
+                collectionName: selectedAuctionNFT.collectionName
               }
             )
           } else {
@@ -1146,7 +1147,8 @@ export default function ProfilePage() {
                 {
                   name: collectionData.collectionName,
                   description: collectionData.collectionDescription,
-                  image: collectionData.collectionImage
+                  image: collectionData.collectionImage,
+                  collectionName: collectionData.collectionName
                 }
               )
             }

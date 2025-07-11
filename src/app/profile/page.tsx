@@ -1125,6 +1125,19 @@ export default function ProfilePage() {
             // Collection auction (stored in window for retrieval)
             const collectionData = (window as any).pendingAuctionData
             if (collectionData) {
+              // Get individual NFT metadata for collection
+              const individualNftMetadata = collectionData.tokenIds.map((tokenId: string) => {
+                const nft = nfts.find(n => n.tokenId === tokenId && n.contractAddress === collectionData.nftContract)
+                return {
+                  tokenId,
+                  name: nft?.name || `NFT #${tokenId}`,
+                  description: nft?.description || '',
+                  image: nft?.image || '/placeholder-nft.jpg',
+                  attributes: nft?.attributes || [],
+                  rarity: nft?.rarity || 'Common'
+                }
+              })
+
               auctionDataForDb = prepareAuctionData(
                 auctionId,
                 collectionData.nftContract,
@@ -1141,7 +1154,8 @@ export default function ProfilePage() {
                   durationHours: collectionData.duration / 3600,
                   allowPublicReveal: collectionData.allowPublicReveal,
                   collectionImage: collectionData.collectionImage,
-                  collectionImageDriveId: collectionData.collectionImageDriveId
+                  collectionImageDriveId: collectionData.collectionImageDriveId,
+                  individualNftMetadata: individualNftMetadata
                 },
                 auctionHash,
                 {

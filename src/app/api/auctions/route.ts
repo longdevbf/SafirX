@@ -129,6 +129,7 @@ interface CreateAuctionData {
   durationHours: number
   allowPublicReveal?: boolean
   nftMetadata?: Record<string, unknown>
+  individualNftMetadata?: any[]
   creationTxHash: string
 }
 
@@ -154,6 +155,7 @@ async function createAuction(data: CreateAuctionData) {
     durationHours,
     allowPublicReveal,
     nftMetadata,
+    individualNftMetadata,
     creationTxHash
   } = data
 
@@ -170,6 +172,12 @@ async function createAuction(data: CreateAuctionData) {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'ACTIVE'
       ) RETURNING *
     `
+
+    // Merge individual NFT metadata into the main metadata for collection auctions
+    const finalMetadata = auctionType === 'COLLECTION' ? {
+      ...nftMetadata,
+      individualNfts: individualNftMetadata || []
+    } : nftMetadata
 
     const result = await pool.query(query, [
       auctionId,
@@ -190,7 +198,7 @@ async function createAuction(data: CreateAuctionData) {
       new Date(endTime * 1000),
       durationHours,
       allowPublicReveal,
-      nftMetadata ? JSON.stringify(nftMetadata) : null,
+      finalMetadata ? JSON.stringify(finalMetadata) : null,
       creationTxHash
     ])
 

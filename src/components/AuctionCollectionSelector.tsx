@@ -169,7 +169,7 @@ export default function AuctionCollectionSelector({
 
     try {
       const formData = new FormData()
-      formData.append('image', collectionImageFile)
+      formData.append('file', collectionImageFile)
       formData.append('type', 'collection')
       formData.append('name', `collection_${Date.now()}_${collectionName.replace(/\s+/g, '_')}`)
 
@@ -185,10 +185,10 @@ export default function AuctionCollectionSelector({
       const result = await response.json()
 
       if (result.success) {
-        console.log('✅ Collection image uploaded:', result.url)
+        console.log('✅ Collection image uploaded:', result.ipfsUrl)
         return { 
-          url: result.url, 
-          driveId: result.driveId 
+          url: result.ipfsUrl, 
+          driveId: result.ipfsHash 
         }
       } else {
         throw new Error(result.error || 'Failed to upload image')

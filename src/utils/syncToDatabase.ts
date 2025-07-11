@@ -54,6 +54,7 @@ interface SyncAuctionData {
   collection_token_ids?: string[]
   collection_image?: string
   allow_public_reveal?: boolean
+  individual_nft_metadata?: any[]
   tx_hash: string
 }
 
@@ -136,13 +137,20 @@ export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<bool
       endTime: Math.floor(data.end_time.getTime() / 1000),
       durationHours: Math.floor((data.end_time.getTime() - Date.now()) / (1000 * 60 * 60)),
       allowPublicReveal: data.allow_public_reveal || false,
-      nftMetadata: {
+      nftMetadata: data.is_collection ? {
+        collectionName: data.collection_name,
+        collectionDescription: data.description,
+        collectionImage: data.collection_image,
+        nftCount: data.collection_token_ids?.length || 0,
+        individualNfts: data.individual_nft_metadata || []
+      } : {
         name: data.name,
         description: data.description,
         image: data.image,
         attributes: data.attributes,
         collectionName: data.collection_name
       },
+      individualNftMetadata: data.individual_nft_metadata || [],
       creationTxHash: data.tx_hash
     }
     
@@ -283,6 +291,7 @@ export function prepareAuctionData(
     allowPublicReveal: boolean
     collectionImage?: string
     collectionImageDriveId?: string
+    individualNftMetadata?: any[]
   },
   txHash: string,
   nftData: {
@@ -316,6 +325,7 @@ export function prepareAuctionData(
     collection_token_ids: collectionTokenIds || [],
     collection_image: auctionParams.collectionImage || nftData.image,
     allow_public_reveal: auctionParams.allowPublicReveal,
+    individual_nft_metadata: auctionParams.individualNftMetadata || [],
     tx_hash: txHash
   }
 }

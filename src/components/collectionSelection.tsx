@@ -44,7 +44,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
   const [collectionImage, setCollectionImage] = useState("")
   const [collectionDescription, setCollectionDescription] = useState("")
   const [uploading, setUploading] = useState(false)
-  const [selectedCoverImage, setSelectedCoverImage] = useState<File | null>(null)
+  const [, setSelectedCoverImage] = useState<File | null>(null)
 
   // Group NFTs by contract address
   const nftsByContract = nfts.reduce((acc, nft) => {

@@ -28,7 +28,7 @@ export interface DatabaseAuction {
   final_price: string | null
   total_bids: number
   unique_bidders: number
-  nft_metadata: any
+  nft_metadata: Record<string, unknown> | null
   creation_tx_hash: string
   finalization_tx_hash: string | null
   created_at: string
@@ -87,7 +87,7 @@ interface AuctionDatabaseContextType {
   fetchBidHistory: (auctionId: number) => Promise<BidHistory[]>
   
   // Real-time updates
-  updateAuctionState: (auctionId: number, state: string) => void
+  updateAuctionState: (auctionId: number, state: 'ACTIVE' | 'ENDED' | 'FINALIZED' | 'CANCELLED') => void
   
   // Stats
   stats: {
@@ -129,7 +129,7 @@ export function AuctionDatabaseProvider({ children }: { children: ReactNode }) {
         console.log(`✅ Loaded ${data.auctions.length} auctions from database`)
         
         // ✅ Process auctions with computed properties
-        const processedAuctions = data.auctions.map((auction: any) => {
+        const processedAuctions = data.auctions.map((auction: DatabaseAuction) => {
           const now = Date.now()
           const endTime = new Date(auction.end_time).getTime()
           const timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000))
@@ -212,12 +212,12 @@ export function AuctionDatabaseProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ✅ Update auction state in real-time
-  const updateAuctionState = useCallback((auctionId: number, newState: string) => {
+  const updateAuctionState = useCallback((auctionId: number, newState: 'ACTIVE' | 'ENDED' | 'FINALIZED' | 'CANCELLED') => {
     setAuctions(prev => prev.map(auction => 
       auction.auction_id === auctionId 
         ? { 
             ...auction, 
-            state: newState as any,
+            state: newState,
             isActive: newState === 'ACTIVE',
             isEnded: newState === 'ENDED',
             isFinalized: newState === 'FINALIZED',

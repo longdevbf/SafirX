@@ -67,7 +67,7 @@ export default function AuctionsPage() {
   const [cancelReason, setCancelReason] = useState("")
   const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
   // ✅ Use database context instead of blockchain context for fast loading
-  const { groupedAuctions, loading, error, refetch, auctions } = useAuctionDatabase()
+  const { groupedAuctions, loading, refetch } = useAuctionDatabase()
   const { address, isConnected } = useWallet()
   
   const {
@@ -266,20 +266,7 @@ export default function AuctionsPage() {
     return isUserSeller(auction) && auction.isActive && auction.total_bids === 0
   }
 
-  // ✅ Format time remaining for countdown (database version)
-  const formatTimeRemainingSec = (seconds: number) => {
-    if (seconds <= 0) return "Ended"
-    
-    const days = Math.floor(seconds / 86400)
-    const hours = Math.floor((seconds % 86400) / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-    
-    if (days > 0) return `${days}d ${hours}h ${minutes}m`
-    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`
-    if (minutes > 0) return `${minutes}m ${secs}s`
-    return `${secs}s`
-  }
+
 
   // ✅ Render cancel auction dialog
   const renderCancelDialog = (auction: DatabaseAuction) => {

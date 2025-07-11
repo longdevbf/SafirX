@@ -6,7 +6,7 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
 })
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const client = await pool.connect()
     

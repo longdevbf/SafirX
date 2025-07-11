@@ -40,7 +40,7 @@ async function createAuctionsTable() {
     for (const dropSql of dropIndexes) {
       try {
         await client.query(dropSql)
-      } catch (error) {
+      } catch {
         // Ignore errors for non-existent indexes
       }
     }

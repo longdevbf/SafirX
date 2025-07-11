@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   try {
     let query = 'SELECT * FROM auctions WHERE 1=1'
-    const params: any[] = []
+    const params: (string | number)[] = []
     let paramCount = 0
 
     if (state) {
@@ -109,8 +109,31 @@ export async function POST(request: NextRequest) {
   }
 }
 
+interface CreateAuctionData {
+  auctionId: number
+  auctionType: 'SINGLE_NFT' | 'COLLECTION'
+  title: string
+  description?: string
+  sellerAddress: string
+  nftContract: string
+  tokenId?: number
+  tokenIds?: number[]
+  nftCount?: number
+  collectionImageUrl?: string
+  collectionImageDriveId?: string
+  startingPrice: string
+  reservePrice: string
+  minBidIncrement: string
+  startTime: number
+  endTime: number
+  durationHours: number
+  allowPublicReveal?: boolean
+  nftMetadata?: Record<string, unknown>
+  creationTxHash: string
+}
+
 // Create new auction
-async function createAuction(data: any) {
+async function createAuction(data: CreateAuctionData) {
   const {
     auctionId,
     auctionType,
@@ -178,8 +201,8 @@ async function createAuction(data: any) {
       auction: result.rows[0]
     })
 
-  } catch (error: any) {
-    if (error.code === '23505') { // Unique constraint violation
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === '23505') { // Unique constraint violation
       console.log(`⚠️ Auction ${auctionId} already exists in database`)
       return NextResponse.json({
         success: true,
@@ -195,8 +218,14 @@ async function createAuction(data: any) {
   }
 }
 
+interface UpdateAuctionStateData {
+  auctionId: number
+  state: 'ACTIVE' | 'ENDED' | 'FINALIZED' | 'CANCELLED'
+  txHash?: string
+}
+
 // Update auction state
-async function updateAuctionState(data: any) {
+async function updateAuctionState(data: UpdateAuctionStateData) {
   const { auctionId, state, txHash } = data
 
   try {
@@ -234,8 +263,17 @@ async function updateAuctionState(data: any) {
   }
 }
 
+interface FinalizeAuctionData {
+  auctionId: number
+  winnerAddress?: string
+  finalPrice?: string
+  totalBids?: number
+  uniqueBidders?: number
+  finalizationTxHash: string
+}
+
 // Finalize auction with results
-async function finalizeAuction(data: any) {
+async function finalizeAuction(data: FinalizeAuctionData) {
   const {
     auctionId,
     winnerAddress,
@@ -293,8 +331,18 @@ async function finalizeAuction(data: any) {
   }
 }
 
+interface SyncBidHistoryData {
+  auctionId: number
+  bidHistory?: Array<{
+    bidder: string
+    amount: string
+    bidNumber: number
+    timestamp: string
+  }>
+}
+
 // Sync bid history from blockchain
-async function syncBidHistory(data: any) {
+async function syncBidHistory(data: SyncBidHistoryData) {
   const { auctionId, bidHistory } = data
 
   try {

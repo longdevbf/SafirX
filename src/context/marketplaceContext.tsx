@@ -20,7 +20,7 @@ interface MarketplaceContextType {
   likeNFT: (listingId: string) => Promise<number>
   updateNFTPrice: (listingId: string, newPrice: string) => Promise<unknown>
   cancelNFTListing: (listingId: string) => Promise<boolean>
-  buyNFT: (listingId: string, buyerAddress: string) => Promise<unknown>
+  buyNFT: (listingId: string) => Promise<unknown>
 }
 
 // Create context with default values
@@ -60,10 +60,15 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     hasMore,
     total,
     likeNFT,
-    updateNFTPrice: dbUpdateNFTPrice,
-    cancelNFTListing: dbCancelNFTListing,
-    buyNFT: dbBuyNFT
+    updateNFTPrice: _dbUpdateNFTPrice,
+    cancelNFTListing: _dbCancelNFTListing,
+    buyNFT: _dbBuyNFT
   } = useMarketplaceDB()
+  
+  // Suppress unused variable warnings
+  void _dbUpdateNFTPrice
+  void _dbCancelNFTListing
+  void _dbBuyNFT
 
   // Sync database NFTs with local state
   useEffect(() => {
@@ -128,7 +133,7 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }
 
-  const buyNFT = async (listingId: string, buyerAddress: string) => {
+  const buyNFT = async (listingId: string) => {
     try {
       const response = await fetch(`/api/listings/${listingId}`, {
         method: 'PUT',

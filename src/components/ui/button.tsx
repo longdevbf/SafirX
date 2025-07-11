@@ -45,7 +45,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : "button"
     
     // Suppress hydration warning for attributes that may be added by browser extensions
-    const [mounted, setMounted] = React.useState(false)
+    const [, setMounted] = React.useState(false)
     React.useEffect(() => {
       setMounted(true)
     }, [])

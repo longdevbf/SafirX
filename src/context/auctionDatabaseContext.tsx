@@ -29,6 +29,7 @@ export interface DatabaseAuction {
   total_bids: number
   unique_bidders: number
   nft_metadata: Record<string, unknown> | null
+  nft_metadata_individuals?: any[] | null
   creation_tx_hash: string
   finalization_tx_hash: string | null
   created_at: string

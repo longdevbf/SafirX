@@ -259,31 +259,27 @@ async function updateAuctionState(data: UpdateAuctionStateData) {
   const { auctionId, state, txHash } = data
 
   try {
-    const query = `
-      UPDATE auctions 
-      SET state = $1, updated_at = CURRENT_TIMESTAMP
-      ${txHash ? ', finalization_tx_hash = $3' : ''}
-      WHERE auction_id = $2 
-      RETURNING *
-    `
-    
-    const params = txHash ? [state, auctionId, txHash] : [state, auctionId]
-    const result = await pool.query(query, params)
-
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Auction not found' },
-        { status: 404 }
-      )
+    if (state === 'CANCELLED') {
+      // Hard delete cancelled auctions so they no longer appear
+      await pool.query('DELETE FROM auctions WHERE auction_id = $1', [auctionId])
+      console.log(`🗑️ Auction ${auctionId} deleted from database (cancelled)`)
+      return NextResponse.json({ success: true })
     }
+
+    const query = `
+      UPDATE auctions
+      SET state = $2, updated_at = CURRENT_TIMESTAMP${txHash ? ', finalization_tx_hash = $3' : ''}
+      WHERE auction_id = $1
+    `
+
+    const params: (string | number)[] = [auctionId, state]
+    if (txHash) params.push(txHash)
+
+    await pool.query(query, params)
 
     console.log(`✅ Auction ${auctionId} state updated to ${state}`)
 
-    return NextResponse.json({
-      success: true,
-      auction: result.rows[0]
-    })
-
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error updating auction state:', error)
     return NextResponse.json(

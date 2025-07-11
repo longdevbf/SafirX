@@ -62,6 +62,8 @@ import {
   useSealedBidAuction, 
   ProcessedAuction
 } from "@/hooks/use-auction"
+import { updateAuctionState as updateAuctionStateDb } from "@/utils/syncAuctionToDatabase"
+import React from "react"
 
 // ✅ Adapter function to convert DatabaseAuction to ProcessedAuction
 const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): ProcessedAuction => {
@@ -97,7 +99,8 @@ const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): Processe
       name: dbAuction.title,
       description: dbAuction.description,
       image: dbAuction.collection_image_url || '/placeholder.svg'
-    }
+    },
+    individualNftMetadata: dbAuction.nft_metadata_individuals || []
   }
 }
 
@@ -110,6 +113,9 @@ export default function AuctionsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
+  const processedCancelTx = React.useRef<Set<string>>(new Set())
+  const pendingCancelRef = React.useRef<{ auctionId: string; txHash: string } | null>(null)
+  const processedConfirmTx = React.useRef<Set<string>>(new Set())
   
   // ✅ Use database context instead of blockchain context for fast loading
   const { groupedAuctions, loading, refetch } = useAuctionDatabase()
@@ -137,15 +143,17 @@ export default function AuctionsPage() {
 
   // ✅ Handle successful transactions
   useEffect(() => {
-    if (isConfirmed && hash) {
+    if (isConfirmed && hash && !processedConfirmTx.current.has(hash)) {
+      processedConfirmTx.current.add(hash)
+
       toast({
         title: "✅ Transaction Successful",
         description: "Your transaction has been confirmed on the blockchain.",
       })
-      
-      // Refresh auction data
+
+      // Refresh auction data once
       refetch()
-      
+
       // Reset states
       setSelectedAuction(null)
       setBidAmount("")
@@ -164,6 +172,20 @@ export default function AuctionsPage() {
       })
     }
   }, [error])
+
+  // Effect: on transaction confirmation, handle pending cancel sync
+  useEffect(() => {
+    if (isConfirmed && hash && pendingCancelRef.current && pendingCancelRef.current.txHash === hash) {
+      const { auctionId, txHash } = pendingCancelRef.current
+      // Avoid duplicate DB calls
+      if (!processedCancelTx.current.has(txHash)) {
+        processedCancelTx.current.add(txHash)
+        updateAuctionStateDb(auctionId, 'CANCELLED', txHash).then(() => {
+          pendingCancelRef.current = null
+        })
+      }
+    }
+  }, [isConfirmed, hash])
 
   // ✅ Handle bid placement
   const handlePlaceBid = async () => {
@@ -211,7 +233,8 @@ export default function AuctionsPage() {
     }
 
     try {
-      await cancelAuction(auctionId, reason)
+      const txHash = await cancelAuction(auctionId, reason)
+      pendingCancelRef.current = { auctionId, txHash }
     } catch (error) {
       console.error("Error canceling auction:", error)
     }
@@ -627,31 +650,37 @@ export default function AuctionsPage() {
 
             {/* NFT Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {auction.tokenIdsList.map((tokenId) => (
-                <div key={tokenId.toString()} className="border rounded-lg overflow-hidden">
-                  <div className="aspect-square relative">
-                    <Image
-                      src={auction.nftMetadata?.image || '/placeholder.svg'}
-                      alt={`${auction.title} #${tokenId.toString()}`}
-                      fill
-                      className="object-cover"
-                    />
-                    <div className="absolute top-2 right-2">
-                      <Badge variant="secondary" className="text-xs">
-                        #{tokenId.toString()}
-                      </Badge>
+              {(auction.individualNftMetadata && auction.individualNftMetadata.length > 0
+                ? auction.individualNftMetadata
+                : auction.tokenIdsList.map(id => ({ tokenId: id })))
+                .map((item: any, idx: number) => {
+                  const tokenId = item.tokenId || auction.tokenIdsList[idx] || BigInt(0)
+                  return (
+                    <div key={tokenId.toString()} className="border rounded-lg overflow-hidden">
+                      <div className="aspect-square relative">
+                        <Image
+                          src={item.image || auction.nftMetadata?.image || '/placeholder.svg'}
+                          alt={`${item.name || auction.title} #${tokenId.toString()}`}
+                          fill
+                          className="object-cover"
+                        />
+                        <div className="absolute top-2 right-2">
+                          <Badge variant="secondary" className="text-xs">
+                            #{tokenId.toString()}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <div className="text-sm font-medium truncate">
+                          {item.name || `${auction.title} #${tokenId.toString()}`}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Token ID: {tokenId.toString()}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-2">
-                    <div className="text-sm font-medium truncate">
-                      {auction.nftMetadata?.name || auction.title} #{tokenId.toString()}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Token ID: {tokenId.toString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  )
+                })}
             </div>
 
             {/* Collection Auction Info */}

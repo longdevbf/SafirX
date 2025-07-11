@@ -198,7 +198,7 @@ export default function ProfilePage() {
           tokenId: tokenId ? parseInt(tokenId) : null,
           tokenIds: tokenIds?.map(id => parseInt(id)) || null,
           nftCount: tokenIds ? tokenIds.length : 1,
-          collectionImageUrl: auctionData.collectionImage || null,
+          collectionImageUrl: auctionData.collectionImageUrl || auctionData.collectionImage || null,
           collectionImageDriveId: auctionData.collectionImageDriveId || null,
           startingPrice: auctionData.startingPrice,
           reservePrice: auctionData.reservePrice,
@@ -207,6 +207,7 @@ export default function ProfilePage() {
           endTime: Math.floor(endTime),
           durationHours: auctionData.durationHours || Math.floor(auctionData.duration / 3600),
           allowPublicReveal: auctionData.allowPublicReveal,
+          individualNftMetadata: auctionData.individualNftMetadata ?? null,
           nftMetadata,
           creationTxHash: txHash
         }
@@ -1109,7 +1110,7 @@ export default function ProfilePage() {
                 startingPrice: auctionData.startingPrice,
                 reservePrice: auctionData.reservePrice,
                 minBidIncrement: auctionData.minBidIncrement,
-                durationHours: auctionData.duration,
+                duration: auctionData.duration,
                 allowPublicReveal: auctionData.allowPublicReveal
               },
               auctionHash,
@@ -1190,7 +1191,7 @@ export default function ProfilePage() {
                   minBidIncrement: collectionData.minBidIncrement,
                   durationHours: collectionData.duration / 3600,
                   allowPublicReveal: collectionData.allowPublicReveal,
-                  collectionImage: collectionData.collectionImage,
+                  collectionImageUrl: collectionData.collectionImage,
                   collectionImageDriveId: collectionData.collectionImageDriveId,
                   individualNftMetadata: individualNftMetadata
                 },
@@ -2258,7 +2259,7 @@ export default function ProfilePage() {
                   <Checkbox
                     id="allowPublicReveal"
                     checked={auctionData.allowPublicReveal}
-                    onCheckedChange={v => setAuctionData(d => ({ ...d, allowPublicReveal: !!v }))}
+                    onCheckedChange={(v: boolean | "indeterminate") => setAuctionData(d => ({ ...d, allowPublicReveal: !!v }))}
                     className="mt-1"
                   />
                   <div className="flex-1">

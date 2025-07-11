@@ -120,6 +120,7 @@ export function prepareAuctionData(
     allowPublicReveal: boolean
     collectionImageUrl?: string
     collectionImageDriveId?: string
+    individualNftMetadata?: any[]
   },
   txHash: string,
   nftMetadata?: {
@@ -152,6 +153,7 @@ export function prepareAuctionData(
     durationHours: auctionData.duration,
     allowPublicReveal: auctionData.allowPublicReveal,
     nftMetadata,
+    individualNftMetadata: auctionData.individualNftMetadata ?? null,
     creationTxHash: txHash
   }
 }

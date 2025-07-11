@@ -121,7 +121,8 @@ export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<bool
     console.log('🔍 DEBUG individual_nft_metadata:', {
       is_collection: data.is_collection,
       individual_nft_metadata: data.individual_nft_metadata,
-      individual_count: data.individual_nft_metadata?.length || 0
+      individual_count: data.individual_nft_metadata?.length || 0,
+      first_item: data.individual_nft_metadata?.[0] || null
     })
     
     // Transform data to match API expectations
@@ -319,6 +320,13 @@ export function prepareAuctionData(
 ): SyncAuctionData {
   const endTime = new Date(Date.now() + (auctionParams.durationHours * 60 * 60 * 1000))
   const isCollection = auctionParams.auctionType === 'COLLECTION'
+  
+  // ✅ DEBUG: Log individual NFT metadata in prepareAuctionData
+  console.log('🔍 DEBUG prepareAuctionData:', {
+    auctionType: auctionParams.auctionType,
+    individualNftMetadata: auctionParams.individualNftMetadata,
+    individualCount: auctionParams.individualNftMetadata?.length || 0
+  })
   
   return {
     auction_id: auctionId,

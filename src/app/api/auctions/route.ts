@@ -176,7 +176,9 @@ async function createAuction(data: CreateAuctionData) {
     // Merge individual NFT metadata into the main metadata for collection auctions
     const finalMetadata = auctionType === 'COLLECTION' ? {
       ...nftMetadata,
-      individualNfts: individualNftMetadata || []
+      individualNfts: individualNftMetadata && individualNftMetadata.length > 0 
+        ? individualNftMetadata 
+        : []
     } : nftMetadata
 
     // ✅ DEBUG: Log metadata construction
@@ -184,6 +186,7 @@ async function createAuction(data: CreateAuctionData) {
       auctionType,
       nftMetadata,
       individualNftMetadata,
+      individualNftMetadataLength: individualNftMetadata?.length || 0,
       finalMetadata,
       individualNftsCount: finalMetadata && typeof finalMetadata === 'object' && 'individualNfts' in finalMetadata 
         ? (finalMetadata.individualNfts as any[])?.length || 0 

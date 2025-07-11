@@ -59,7 +59,54 @@ async function testGoogleDriveAccess(): Promise<boolean> {
   }
 }
 
-// Upload to Google Drive with better error handling
+// Enhanced upload function with better error handling and fallback
+async function uploadImageWithFallback(file: File, fileName: string, isProfile: boolean = false): Promise<string> {
+  console.log(`Processing image upload: ${fileName} (${(file.size / 1024).toFixed(1)}KB)`)
+  
+  // Try Google Drive first (with shared drive support)
+  if (driveConfigured && drive) {
+    try {
+      const imageUrl = await uploadToGoogleDrive(file, fileName, isProfile)
+      console.log('✅ Google Drive upload successful:', imageUrl)
+      return imageUrl
+    } catch (error) {
+      console.error('❌ Google Drive upload failed:', error)
+      
+      // If it's a Service Account quota issue, suggest solutions
+      if (error.message.includes('Service Accounts do not have storage quota')) {
+        console.log('💡 Service Account quota issue detected. Consider using shared drives or OAuth delegation.')
+      }
+    }
+  }
+  
+  // Fallback 1: Try converting to base64 if image is small enough (< 1MB)
+  if (file.size < 1024 * 1024) {
+    try {
+      console.log('🔄 Trying base64 conversion fallback...')
+      const buffer = Buffer.from(await file.arrayBuffer())
+      const base64 = buffer.toString('base64')
+      const mimeType = file.type || 'image/jpeg'
+      const dataUrl = `data:${mimeType};base64,${base64}`
+      
+      console.log('✅ Base64 conversion successful')
+      return dataUrl
+    } catch (base64Error) {
+      console.error('❌ Base64 conversion failed:', base64Error)
+    }
+  } else {
+    console.log('⚠️ Image too large for base64 fallback (>1MB)')
+  }
+  
+  // Fallback 2: Use placeholder image
+  const placeholderUrl = isProfile 
+    ? `https://api.dicebear.com/7.x/identicon/svg?seed=${fileName}&size=400&backgroundColor=random`
+    : `https://via.placeholder.com/1200x300/6366f1/ffffff?text=Banner+Image`
+  
+  console.log('🔄 Using placeholder image as final fallback:', placeholderUrl)
+  return placeholderUrl
+}
+
+// Upload to Google Drive with Shared Drive support
 async function uploadToGoogleDrive(file: File, fileName: string, isProfile: boolean = false): Promise<string> {
   if (!drive) {
     throw new Error('Google Drive not configured')
@@ -71,16 +118,23 @@ async function uploadToGoogleDrive(file: File, fileName: string, isProfile: bool
     const buffer = Buffer.from(await file.arrayBuffer())
     const stream = bufferToStream(buffer)
     
-    const response = await drive.files.create({
-      requestBody: {
-        name: `${fileName}_${Date.now()}.${file.name.split('.').pop()}`,
-        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
-      },
+    const fileMetadata = {
+      name: `${fileName}_${Date.now()}.${file.name.split('.').pop()}`,
+      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
+    }
+    
+    // If using shared drive, add supportsAllDrives parameter
+    const createParams = {
+      requestBody: fileMetadata,
       media: {
         mimeType: file.type,
         body: stream,
       },
-    })
+      // Add support for shared drives
+      supportsAllDrives: true,
+    }
+    
+    const response = await drive.files.create(createParams)
 
     if (!response.data.id) {
       throw new Error('Failed to get file ID from Google Drive response')
@@ -88,13 +142,14 @@ async function uploadToGoogleDrive(file: File, fileName: string, isProfile: bool
 
     console.log(`File uploaded successfully with ID: ${response.data.id}`)
 
-    // Make file publicly viewable
+    // Make file publicly viewable with shared drive support
     await drive.permissions.create({
       fileId: response.data.id,
       requestBody: {
         role: 'reader',
         type: 'anyone',
       },
+      supportsAllDrives: true, // Add this for shared drive support
     })
 
     console.log('File permissions updated to public')
@@ -189,30 +244,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'No collection image provided' }, { status: 400 })
       }
       
-      if (driveConfigured) {
-        try {
-          console.log('📤 Uploading collection image to Google Drive...')
-          const imageUrl = await uploadToGoogleDrive(collectionImage, `collection_cover`, false)
-          console.log('✅ Collection image uploaded:', imageUrl)
-          
-          return NextResponse.json({ 
-            collection_image: imageUrl,
-            success: true 
-          })
-        } catch (error) {
-          console.error('❌ Failed to upload collection image:', error)
-          return NextResponse.json({ 
-            error: 'Failed to upload collection image',
-            details: error.message 
-          }, { status: 500 })
-        }
-      } else {
-        console.log('⚠️ Google Drive not configured, using placeholder')
-        const placeholderUrl = `https://via.placeholder.com/800x400/6366f1/ffffff?text=Collection+${Date.now()}`
+      try {
+        console.log('📤 Uploading collection image...')
+        const imageUrl = await uploadImageWithFallback(collectionImage, `collection_cover`, false)
+        console.log('✅ Collection image processed:', imageUrl)
+        
         return NextResponse.json({ 
-          collection_image: placeholderUrl,
+          collection_image: imageUrl,
           success: true 
         })
+      } catch (error) {
+        console.error('❌ Failed to process collection image:', error)
+        return NextResponse.json({ 
+          error: 'Failed to process collection image',
+          details: error.message 
+        }, { status: 500 })
       }
     }
     
@@ -254,37 +300,27 @@ export async function POST(request: NextRequest) {
     let profileImageUrl = existingUser?.m_img || `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`
     let bannerImageUrl = existingUser?.b_img || ''
 
-    // Upload profile image
+    // Upload profile image with enhanced fallback
     if (profileImage) {
-      if (driveConfigured) {
-        try {
-          console.log('Uploading profile image...')
-          profileImageUrl = await uploadToGoogleDrive(profileImage, `profile_${address}`, true) // Pass true for profile
-          console.log('Profile image uploaded:', profileImageUrl)
-        } catch (error) {
-          console.error('Failed to upload profile image:', error)
-          // Keep existing image or use default
-        }
-      } else {
-        console.log('Google Drive not configured, using placeholder for profile image')
-        profileImageUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${address}_${Date.now()}`
+      try {
+        console.log('Uploading profile image...')
+        profileImageUrl = await uploadImageWithFallback(profileImage, `profile_${address}`, true)
+        console.log('Profile image uploaded:', profileImageUrl)
+      } catch (error) {
+        console.error('Failed to upload profile image:', error)
+        // Keep existing image or use default
       }
     }
 
-    // Upload banner image
+    // Upload banner image with enhanced fallback
     if (bannerImage) {
-      if (driveConfigured) {
-        try {
-          console.log('Uploading banner image...')
-          bannerImageUrl = await uploadToGoogleDrive(bannerImage, `banner_${address}`, false) // Pass false for banner
-          console.log('Banner image uploaded:', bannerImageUrl)
-        } catch (error) {
-          console.error('Failed to upload banner image:', error)
-          // Keep existing image
-        }
-      } else {
-        console.log('Google Drive not configured, using placeholder for banner image')
-        bannerImageUrl = `https://via.placeholder.com/1200x300/6366f1/ffffff?text=Banner`
+      try {
+        console.log('Uploading banner image...')
+        bannerImageUrl = await uploadImageWithFallback(bannerImage, `banner_${address}`, false)
+        console.log('Banner image uploaded:', bannerImageUrl)
+      } catch (error) {
+        console.error('Failed to upload banner image:', error)
+        // Keep existing image
       }
     }
 

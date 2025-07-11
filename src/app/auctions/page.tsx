@@ -52,7 +52,7 @@ import {
   useSealedBidAuction, 
   ProcessedAuction
 } from "@/hooks/use-auction"
-import { useAuction } from "@/context/auctionContext"
+import { useAuctionDatabase, DatabaseAuction } from "@/context/auctionDatabaseContext"
 import { toast } from "@/hooks/use-toast"
 //import { AuctionState } from "@/abis/AuctionSealedBid"
 import { BidHistoryDialog } from "@/components/BidHistoryDialog"
@@ -66,9 +66,9 @@ export default function AuctionsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { groupedAuctions, loading, error, refetch, auctions } = useAuction()
-  const { address, isConnected } = useWallet()// ✅ Fetch ALL auctions (active + ended + finalized)
+  // ✅ Use database context instead of blockchain context for fast loading
+  const { groupedAuctions, loading, error, refetch, auctions } = useAuctionDatabase()
+  const { address, isConnected } = useWallet()
   
   const {
     placeBid,
@@ -160,7 +160,7 @@ export default function AuctionsPage() {
         return
       }
 
-      await placeBid(selectedAuction.auctionId.toString(), bidAmount)
+      await placeBid(selectedAuction.auction_id.toString(), bidAmount)
       
       toast({
         title: "🔒 Sealed Bid Submitted",
@@ -255,21 +255,36 @@ export default function AuctionsPage() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
-  const isUserSeller = (auction: ProcessedAuction) => {
-    return address && auction.seller.toLowerCase() === address.toLowerCase()
+  const isUserSeller = (auction: DatabaseAuction) => {
+    return address && auction.seller_address.toLowerCase() === address.toLowerCase()
   }
 
   // ✅ Check if auction can be cancelled
-  const canCancelAuction = (auction: ProcessedAuction) => {
+  const canCancelAuction = (auction: DatabaseAuction) => {
     // Seller can cancel if auction is active
     // Contract logic: if totalBids > 0, only owner can cancel (not seller)
-    return isUserSeller(auction) && auction.isActive && auction.totalBids === BigInt(0)
+    return isUserSeller(auction) && auction.isActive && auction.total_bids === 0
+  }
+
+  // ✅ Format time remaining for countdown (database version)
+  const formatTimeRemainingSec = (seconds: number) => {
+    if (seconds <= 0) return "Ended"
+    
+    const days = Math.floor(seconds / 86400)
+    const hours = Math.floor((seconds % 86400) / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`
+    if (minutes > 0) return `${minutes}m ${secs}s`
+    return `${secs}s`
   }
 
   // ✅ Render cancel auction dialog
-  const renderCancelDialog = (auction: ProcessedAuction) => {
+  const renderCancelDialog = (auction: DatabaseAuction) => {
     return (
-      <Dialog open={showCancelDialog === auction.auctionId.toString()} onOpenChange={(open) => {
+              <Dialog open={showCancelDialog === auction.auction_id.toString()} onOpenChange={(open) => {
         if (!open) {
           setShowCancelDialog(null)
           setCancelReason("")
@@ -280,7 +295,7 @@ export default function AuctionsPage() {
             variant="destructive"
             className="w-full" 
             onClick={() => {
-              setShowCancelDialog(auction.auctionId.toString())
+              setShowCancelDialog(auction.auction_id.toString())
               setCancelReason("")
             }}
             disabled={!canCancelAuction(auction) || !isConnected}
@@ -378,7 +393,7 @@ export default function AuctionsPage() {
               {canCancelAuction(auction) ? (
                 <Button
                   variant="destructive"
-                  onClick={() => handleCancelAuction(auction.auctionId.toString(), cancelReason)}
+                  onClick={() => handleCancelAuction(auction.auction_id.toString(), cancelReason)}
                   disabled={
                     !cancelReason.trim() || 
                     isPending || 

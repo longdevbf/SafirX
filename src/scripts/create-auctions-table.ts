@@ -23,8 +23,30 @@ async function createAuctionsTable() {
     const client = await pool.connect()
     console.log('✅ Connected successfully!')
     
-    // Drop and recreate auctions table for fresh start
-    console.log('🧹 Dropping existing auctions table if exists...')
+    // Drop existing indexes first
+    console.log('🧹 Dropping existing indexes if they exist...')
+    const dropIndexes = [
+      'DROP INDEX IF EXISTS idx_auctions_auction_id',
+      'DROP INDEX IF EXISTS idx_auctions_seller',
+      'DROP INDEX IF EXISTS idx_auctions_state',
+      'DROP INDEX IF EXISTS idx_auctions_end_time',
+      'DROP INDEX IF EXISTS idx_auctions_nft_contract',
+      'DROP INDEX IF EXISTS idx_auctions_type',
+      'DROP INDEX IF EXISTS idx_bid_history_auction',
+      'DROP INDEX IF EXISTS idx_bid_history_bidder',
+      'DROP INDEX IF EXISTS idx_bid_history_amount'
+    ]
+    
+    for (const dropSql of dropIndexes) {
+      try {
+        await client.query(dropSql)
+      } catch (error) {
+        // Ignore errors for non-existent indexes
+      }
+    }
+    
+    // Drop and recreate tables for fresh start
+    console.log('🧹 Dropping existing tables if they exist...')
     await client.query(`DROP TABLE IF EXISTS auction_bid_history CASCADE`)
     await client.query(`DROP TABLE IF EXISTS auctions CASCADE`)
     
@@ -85,17 +107,6 @@ async function createAuctionsTable() {
       )
     `)
     
-    // Create indexes for performance
-    console.log('📊 Creating indexes...')
-    await client.query(`
-      CREATE INDEX idx_auctions_auction_id ON auctions(auction_id);
-      CREATE INDEX idx_auctions_seller ON auctions(seller_address);
-      CREATE INDEX idx_auctions_state ON auctions(state);
-      CREATE INDEX idx_auctions_end_time ON auctions(end_time);
-      CREATE INDEX idx_auctions_nft_contract ON auctions(nft_contract);
-      CREATE INDEX idx_auctions_type ON auctions(auction_type);
-    `)
-    
     // Create bid history table for finalized auctions
     console.log('🔨 Creating auction_bid_history table...')
     await client.query(`
@@ -113,6 +124,17 @@ async function createAuctionsTable() {
         
         UNIQUE(auction_id, bidder_address)  -- One bid per bidder per auction
       )
+    `)
+    
+    // Create indexes for performance
+    console.log('📊 Creating indexes...')
+    await client.query(`
+      CREATE INDEX idx_auctions_auction_id ON auctions(auction_id);
+      CREATE INDEX idx_auctions_seller ON auctions(seller_address);
+      CREATE INDEX idx_auctions_state ON auctions(state);
+      CREATE INDEX idx_auctions_end_time ON auctions(end_time);
+      CREATE INDEX idx_auctions_nft_contract ON auctions(nft_contract);
+      CREATE INDEX idx_auctions_type ON auctions(auction_type);
     `)
     
     console.log('📊 Creating bid history indexes...')

@@ -11,6 +11,7 @@ import { WalletProvider } from "@/context/walletContext";
 import {config} from '@/components/config/wagmiConfig'
 import  {MarketplaceProvider}  from "@/context/marketplaceContext"
 import { AuctionProvider } from '@/context/auctionContext'
+import { AuctionDatabaseProvider } from '@/context/auctionDatabaseContext'
 const queryClient = new QueryClient();
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -22,7 +23,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <WalletProvider>
               <MarketplaceProvider>
               <AuctionProvider>
+              <AuctionDatabaseProvider>
               {children}
+              </AuctionDatabaseProvider>
               </AuctionProvider>
               </MarketplaceProvider>
             </WalletProvider>

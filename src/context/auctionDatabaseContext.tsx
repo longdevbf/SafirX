@@ -42,6 +42,15 @@ export interface DatabaseAuction {
   isFinalized: boolean
   isCancelled: boolean
   tokenIds: number[]
+  
+  // Aliases for compatibility with existing code
+  seller: string // Alias for seller_address
+  totalBids: bigint | number // Alias for total_bids  
+  formattedStartingPrice: string
+  formattedReservePrice: string
+  formattedFinalPrice: string
+  formattedMinBidIncrement: string
+  isCollection: boolean
 }
 
 // ✅ Grouped auctions
@@ -118,7 +127,41 @@ export function AuctionDatabaseProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         console.log(`✅ Loaded ${data.auctions.length} auctions from database`)
-        setAuctions(data.auctions)
+        
+        // ✅ Process auctions with computed properties
+        const processedAuctions = data.auctions.map((auction: any) => {
+          const now = Date.now()
+          const endTime = new Date(auction.end_time).getTime()
+          const timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000))
+          
+          return {
+            ...auction,
+            // Computed time fields
+            timeRemaining,
+            isActive: auction.state === 'ACTIVE' && timeRemaining > 0,
+            isEnded: auction.state === 'ENDED' || (auction.state === 'ACTIVE' && timeRemaining === 0),
+            isFinalized: auction.state === 'FINALIZED',
+            isCancelled: auction.state === 'CANCELLED',
+            
+            // Token IDs processing
+            tokenIds: auction.token_ids || (auction.token_id ? [auction.token_id] : []),
+            
+            // Aliases for compatibility
+            seller: auction.seller_address,
+            totalBids: auction.total_bids || 0,
+            
+            // Formatted prices
+            formattedStartingPrice: `${auction.starting_price} ROSE`,
+            formattedReservePrice: `${auction.reserve_price} ROSE`,
+            formattedFinalPrice: auction.final_price ? `${auction.final_price} ROSE` : 'N/A',
+            formattedMinBidIncrement: `${auction.min_bid_increment} ROSE`,
+            
+            // Type helpers
+            isCollection: auction.auction_type === 'COLLECTION'
+          }
+        })
+        
+        setAuctions(processedAuctions)
       } else {
         throw new Error(data.error || 'Failed to fetch auctions')
       }

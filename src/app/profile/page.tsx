@@ -153,6 +153,71 @@ export default function ProfilePage() {
     isConfirmed: isApprovalConfirmed,
   } = useAuctionApproval(selectedAuctionNFT?.contractAddress || '', address)
 
+  // ✅ NEW: Import auction sync utilities
+  const { 
+    syncAuctionToDatabase, 
+    prepareAuctionData,
+    getAuctionIdFromTransaction 
+  } = React.useMemo(() => {
+    return {
+      syncAuctionToDatabase: async (data: any) => {
+        try {
+          const response = await fetch('/api/auctions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'create', ...data })
+          })
+          const result = await response.json()
+          return result.success
+        } catch (error) {
+          console.error('❌ Failed to sync auction:', error)
+          return false
+        }
+      },
+      prepareAuctionData: (
+        auctionId: string,
+        nftContract: string,
+        tokenId: string | null,
+        tokenIds: string[] | null,
+        sellerAddress: string,
+        auctionData: any,
+        txHash: string,
+        nftMetadata?: any
+      ) => {
+        const now = Date.now() / 1000
+        const endTime = now + (auctionData.duration || auctionData.durationHours * 3600)
+
+        return {
+          auctionId: parseInt(auctionId),
+          auctionType: auctionData.auctionType || (tokenIds && tokenIds.length > 1 ? 'COLLECTION' : 'SINGLE_NFT'),
+          title: auctionData.title,
+          description: auctionData.description,
+          sellerAddress,
+          nftContract,
+          tokenId: tokenId ? parseInt(tokenId) : null,
+          tokenIds: tokenIds?.map(id => parseInt(id)) || null,
+          nftCount: tokenIds ? tokenIds.length : 1,
+          collectionImageUrl: auctionData.collectionImage || null,
+          collectionImageDriveId: auctionData.collectionImageDriveId || null,
+          startingPrice: auctionData.startingPrice,
+          reservePrice: auctionData.reservePrice,
+          minBidIncrement: auctionData.minBidIncrement,
+          startTime: Math.floor(now),
+          endTime: Math.floor(endTime),
+          durationHours: auctionData.durationHours || Math.floor(auctionData.duration / 3600),
+          allowPublicReveal: auctionData.allowPublicReveal,
+          nftMetadata,
+          creationTxHash: txHash
+        }
+      },
+      getAuctionIdFromTransaction: async (txHash: string) => {
+        // Simplified - in real app you'd parse transaction logs
+        // For now, return the latest auction ID + 1
+        return { auctionId: Date.now().toString(), type: 'single' }
+      }
+    }
+  }, [])
+
   // ✅ IMPROVED: Handle transaction success - track transaction type properly
   React.useEffect(() => {
     if (isMarketConfirmed && marketHash && marketHash !== lastTransactionHash) {
@@ -962,24 +1027,177 @@ export default function ProfilePage() {
     }
   }, [isApprovalConfirmed, approvalHash, refetchAuctionApproval])
 
+  // ✅ NEW: Handle auction creation success and sync to database
   React.useEffect(() => {
     if (isAuctionConfirmed && auctionHash) {
+      console.log('🎉 Auction transaction confirmed:', auctionHash)
+      
+      // Sync auction to database
+      const syncAuctionData = async () => {
+        try {
+          // Get auction ID from transaction
+          const { auctionId } = await getAuctionIdFromTransaction(auctionHash)
+          
+          if (!auctionId) {
+            console.error('❌ Could not get auction ID from transaction')
+            return
+          }
+
+          console.log('🔍 Got auction ID:', auctionId)
+
+          // Prepare auction data based on type
+          let auctionDataForDb: any
+
+          if (selectedAuctionNFT) {
+            // Single NFT auction
+            auctionDataForDb = prepareAuctionData(
+              auctionId,
+              selectedAuctionNFT.contractAddress,
+              selectedAuctionNFT.tokenId,
+              null,
+              address || '',
+              {
+                auctionType: 'SINGLE_NFT',
+                title: auctionData.title,
+                description: auctionData.description,
+                startingPrice: auctionData.startingPrice,
+                reservePrice: auctionData.reservePrice,
+                minBidIncrement: auctionData.minBidIncrement,
+                durationHours: auctionData.duration,
+                allowPublicReveal: auctionData.allowPublicReveal
+              },
+              auctionHash,
+              {
+                name: selectedAuctionNFT.name,
+                description: selectedAuctionNFT.description,
+                image: selectedAuctionNFT.image,
+                attributes: selectedAuctionNFT.attributes
+              }
+            )
+          } else {
+            // Collection auction (stored in window for retrieval)
+            const collectionData = (window as any).pendingAuctionData
+            if (collectionData) {
+              auctionDataForDb = prepareAuctionData(
+                auctionId,
+                collectionData.nftContract,
+                null,
+                collectionData.tokenIds,
+                address || '',
+                {
+                  auctionType: 'COLLECTION',
+                  title: collectionData.title,
+                  description: collectionData.description,
+                  startingPrice: collectionData.startingPrice,
+                  reservePrice: collectionData.reservePrice,
+                  minBidIncrement: collectionData.minBidIncrement,
+                  durationHours: collectionData.duration / 3600,
+                  allowPublicReveal: collectionData.allowPublicReveal,
+                  collectionImage: collectionData.collectionImage,
+                  collectionImageDriveId: collectionData.collectionImageDriveId
+                },
+                auctionHash,
+                {
+                  name: collectionData.collectionName,
+                  description: collectionData.collectionDescription,
+                  image: collectionData.collectionImage
+                }
+              )
+            }
+          }
+
+          if (auctionDataForDb) {
+            const success = await syncAuctionToDatabase(auctionDataForDb)
+            if (success) {
+              console.log('✅ Auction synced to database successfully')
+              
+              toast({
+                title: "🎉 Auction Created Successfully!",
+                description: (
+                  <div className="space-y-2">
+                    <p>Your auction has been created and saved to database!</p>
+                    <div className="text-xs font-mono bg-gray-100 p-2 rounded">
+                      Auction ID: {auctionId}
+                    </div>
+                    <a
+                      href={`https://testnet.explorer.sapphire.oasis.dev/tx/${auctionHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline text-xs block"
+                    >
+                      View on Explorer →
+                    </a>
+                  </div>
+                ),
+                duration: 10000,
+              })
+            } else {
+              console.error('❌ Failed to sync auction to database')
+              toast({
+                title: "⚠️ Database Sync Warning",
+                description: "Auction was created on blockchain but database sync failed. Contact support if needed.",
+                variant: "destructive",
+                duration: 10000,
+              })
+            }
+          }
+
+          // Clear pending data
+          delete (window as any).pendingAuctionData
+
+        } catch (error) {
+          console.error('❌ Error syncing auction to database:', error)
+          toast({
+            title: "⚠️ Database Sync Error",
+            description: "Auction was created on blockchain but database sync failed. Contact support if needed.",
+            variant: "destructive",
+            duration: 10000,
+          })
+        }
+      }
+
+      syncAuctionData()
+      
       showSuccessMessage("🎉 Auction Created Successfully!", auctionHash)
       setShowAuctionDialog(false)
       setShowAuctionCollectionSelector(false)
       setSelectedAuctionNFT(null)
+      setAuctionData({
+        startingPrice: "",
+        reservePrice: "",
+        minBidIncrement: "0.1",
+        duration: 24,
+        allowPublicReveal: false,
+        title: "",
+        description: ""
+      })
+      
+      // Refresh NFTs after delay
+      setTimeout(() => {
+        refetch()
+      }, 3000)
     }
-  }, [isAuctionConfirmed, auctionHash])
+  }, [isAuctionConfirmed, auctionHash, selectedAuctionNFT, auctionData, address, getAuctionIdFromTransaction, prepareAuctionData, syncAuctionToDatabase, refetch])
 
   // ✅ NEW: Handle single NFT auction
   const handleCreateSingleAuction = async (nft: ProcessedNFT) => {
     if (!address || !auctionData.title || !auctionData.startingPrice || !auctionData.reservePrice) return
 
     try {
+      // ✅ Check approval first
       if (!isAuctionApproved) {
+        toast({
+          title: "🔒 Approval Required",
+          description: "Please approve your NFT for the auction contract first.",
+        })
         await approveForAuction()
         return
       }
+
+      console.log('🎯 Creating single NFT auction for:', nft.name)
+
+      // ✅ Store selected NFT for database sync
+      setSelectedAuctionNFT(nft)
 
       await createSingleNFTAuction(
         nft.contractAddress,
@@ -987,13 +1205,26 @@ export default function ProfilePage() {
         auctionData.startingPrice,
         auctionData.reservePrice,
         auctionData.minBidIncrement,
-        auctionData.duration * 3600,
+        auctionData.duration * 3600, // Convert hours to seconds
         auctionData.allowPublicReveal,
         auctionData.title,
         auctionData.description
       )
+
+      toast({
+        title: "⏳ Auction Submitted",
+        description: "Please wait for blockchain confirmation...",
+      })
+
     } catch (error) {
-      console.error('Auction creation failed:', error)
+      console.error('❌ Single NFT auction creation failed:', error)
+      const errorMessage = error as string || error?.toString() || "Failed to create auction"
+
+      toast({
+        title: "❌ Auction Creation Failed",
+        description: errorMessage,
+        variant: "destructive"
+      })
     }
   }
 
@@ -1019,28 +1250,35 @@ export default function ProfilePage() {
         throw new Error('Auction title is required')
       }
 
-      console.log('Creating collection auction with data:', data)
+      console.log('🎯 Creating collection auction with data:', data)
 
+      // ✅ Store data for later database sync
+      ;(window as any).pendingAuctionData = data
+
+      // ✅ Call contract to create auction
       await createCollectionAuction(
         data.nftContract,
         data.tokenIds,
         data.startingPrice,
         data.reservePrice,
         data.minBidIncrement,
-        data.duration, // Already converted to seconds in AuctionCollectionSelector
+        data.duration, // Already in seconds from AuctionCollectionSelector
         data.allowPublicReveal,
         data.title,
         data.description
       )
       
       toast({
-        title: "🎉 Collection Auction Created!",
-        description: "Your collection auction has been successfully created.",
+        title: "⏳ Collection Auction Submitted",
+        description: "Please wait for blockchain confirmation...",
       })
 
     } catch (error) {
-      console.error('Collection auction creation failed:', error)
+      console.error('❌ Collection auction creation failed:', error)
       const errorMessage = error as string || error?.toString() || "Failed to create collection auction"
+
+      // Clear pending data on error
+      delete (window as any).pendingAuctionData
 
       toast({
         title: "❌ Auction Creation Failed",

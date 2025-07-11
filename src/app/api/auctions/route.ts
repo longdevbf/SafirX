@@ -160,6 +160,12 @@ async function createAuction(data: CreateAuctionData) {
   } = data
 
   try {
+    // ✅ FORCE FIX: If individualNftMetadata is undefined but we have nftMetadata.individualNfts, use that
+    let actualIndividualNftMetadata = individualNftMetadata
+    if (!actualIndividualNftMetadata && nftMetadata && typeof nftMetadata === 'object' && 'individualNfts' in nftMetadata) {
+      actualIndividualNftMetadata = (nftMetadata as any).individualNfts
+    }
+
     const query = `
       INSERT INTO auctions (
         auction_id, auction_type, title, description, seller_address,
@@ -176,8 +182,8 @@ async function createAuction(data: CreateAuctionData) {
     // Merge individual NFT metadata into the main metadata for collection auctions
     const finalMetadata = auctionType === 'COLLECTION' ? {
       ...nftMetadata,
-      individualNfts: individualNftMetadata && individualNftMetadata.length > 0 
-        ? individualNftMetadata 
+      individualNfts: actualIndividualNftMetadata && actualIndividualNftMetadata.length > 0 
+        ? actualIndividualNftMetadata 
         : []
     } : nftMetadata
 
@@ -186,7 +192,8 @@ async function createAuction(data: CreateAuctionData) {
       auctionType,
       nftMetadata,
       individualNftMetadata,
-      individualNftMetadataLength: individualNftMetadata?.length || 0,
+      actualIndividualNftMetadata,
+      individualNftMetadataLength: actualIndividualNftMetadata?.length || 0,
       finalMetadata,
       individualNftsCount: finalMetadata && typeof finalMetadata === 'object' && 'individualNfts' in finalMetadata 
         ? (finalMetadata.individualNfts as any[])?.length || 0 
@@ -213,7 +220,7 @@ async function createAuction(data: CreateAuctionData) {
       durationHours,
       allowPublicReveal,
       finalMetadata ? JSON.stringify(finalMetadata) : null,
-      individualNftMetadata && individualNftMetadata.length > 0 ? JSON.stringify(individualNftMetadata) : null,
+      actualIndividualNftMetadata && actualIndividualNftMetadata.length > 0 ? JSON.stringify(actualIndividualNftMetadata) : null,
       creationTxHash
     ])
 

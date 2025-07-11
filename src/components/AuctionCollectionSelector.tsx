@@ -1,65 +1,89 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
-import React, { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {  AlertCircle, Loader2, Gavel, CheckCircle } from "lucide-react"
-import { ProcessedNFT } from "@/interfaces/nft"
-import { useCollectionAuctionApproval } from "@/hooks/use-collection-auction-approval"
-import { useWallet } from "@/context/walletContext"
+import { 
+  Gavel, 
+  Clock, 
+  Users, 
+  Package, 
+  Image as ImageIcon,
+  Upload,
+  AlertCircle, 
+  Info,
+  Loader2,
+  Eye,
+  EyeOff
+} from "lucide-react"
 import Image from "next/image"
+import { ProcessedNFT } from "@/interfaces/nft"
 
-interface AuctionCollectionSelectorProps {
-  nfts: ProcessedNFT[]
-  onClose: () => void
-  onCreateAuction: (data: CollectionAuctionData) => void
-  isLoading?: boolean
-}
-
+// ✅ Collection auction data interface
 export interface CollectionAuctionData {
   nftContract: string
   tokenIds: string[]
+  collectionName: string
+  collectionDescription: string
+  collectionImage: string // ✅ NEW: Collection representative image
+  collectionImageDriveId?: string // ✅ NEW: For tracking upload
   startingPrice: string
   reservePrice: string
   minBidIncrement: string
-  duration: number
+  duration: number // In seconds, not hours
   allowPublicReveal: boolean
   title: string
   description: string
 }
 
-export default function AuctionCollectionSelector({ nfts, onClose, onCreateAuction, isLoading }: AuctionCollectionSelectorProps) {
-  const { address } = useWallet()
-  const [selectedNFTs, setSelectedNFTs] = useState<ProcessedNFT[]>([])
+interface Props {
+  nfts: ProcessedNFT[]
+  isLoading: boolean
+  onClose: () => void
+  onCreateAuction: (data: CollectionAuctionData) => Promise<void>
+}
+
+export default function AuctionCollectionSelector({
+  nfts,
+  isLoading,
+  onClose,
+  onCreateAuction
+}: Props) {
+  // Collection selection
+  const [selectedContract, setSelectedContract] = useState<string>("")
+  const [selectedTokens, setSelectedTokens] = useState<Set<string>>(new Set())
+  const [collectionName, setCollectionName] = useState("")
+  const [collectionDescription, setCollectionDescription] = useState("")
+  
+  // ✅ NEW: Image selection state
+  const [collectionImage, setCollectionImage] = useState<string>("")
+  const [collectionImageFile, setCollectionImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>("")
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [useFirstNFTImage, setUseFirstNFTImage] = useState(true)
+
+  // Auction parameters
   const [startingPrice, setStartingPrice] = useState("")
   const [reservePrice, setReservePrice] = useState("")
   const [minBidIncrement, setMinBidIncrement] = useState("0.1")
-  const [duration, setDuration] = useState(1) // ✅ Changed default from 24 to 1 hour
-  const [allowPublicReveal, setAllowPublicReveal] = useState(false)
+  const [duration, setDuration] = useState(24) // hours
+  const [allowPublicReveal, setAllowPublicReveal] = useState(true)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
 
-  // Get the contract address from selected NFTs
-  const selectedContract = selectedNFTs.length > 0 ? selectedNFTs[0].contractAddress : ''
-  
-  // Use approval hook for the selected contract
-  const {
-    isApproved,
-    approveForAuction,
-    refetchApproval,
-    hash: approvalHash,
-    isPending: isApprovalPending,
-    isConfirming: isApprovalConfirming,
-    isConfirmed: isApprovalConfirmed,
-    error: approvalError
-  } = useCollectionAuctionApproval(selectedContract, address)
-  console.log('Approval Error:', approvalError)
-  // Group NFTs by contract address
+  // UI state
+  const [currentStep, setCurrentStep] = useState(1)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
+
+  // ✅ Group NFTs by contract
   const nftsByContract = nfts.reduce((acc, nft) => {
     if (!acc[nft.contractAddress]) {
       acc[nft.contractAddress] = []
@@ -68,243 +92,582 @@ export default function AuctionCollectionSelector({ nfts, onClose, onCreateAucti
     return acc
   }, {} as Record<string, ProcessedNFT[]>)
 
-  const contractAddresses = Object.keys(nftsByContract)
+  const contractOptions = Object.entries(nftsByContract)
 
-  // Check if selected NFTs are from same contract
-  const selectedContracts = [...new Set(selectedNFTs.map(nft => nft.contractAddress))]
-  const isValidSelection = selectedContracts.length <= 1 && selectedNFTs.length > 1
+  // ✅ Get NFTs for selected contract
+  const selectedContractNfts = selectedContract ? nftsByContract[selectedContract] || [] : []
 
-  // Handle approval success
-  React.useEffect(() => {
-    if (isApprovalConfirmed && approvalHash) {
-      refetchApproval()
-    }
-  }, [isApprovalConfirmed, approvalHash, refetchApproval])
-
-  const handleNFTToggle = (nft: ProcessedNFT, checked: boolean) => {
-    if (checked) {
-      setSelectedNFTs(prev => [...prev, nft])
-    } else {
-      setSelectedNFTs(prev => prev.filter(n => n.id !== nft.id))
-    }
-  }
-
-  const handleSelectAllFromContract = (contractAddress: string) => {
-    const contractNFTs = nftsByContract[contractAddress]
-    const allSelected = contractNFTs.every(nft => 
-      selectedNFTs.some(selected => selected.id === nft.id)
-    )
-
-    if (allSelected) {
-      setSelectedNFTs(prev => prev.filter(nft => nft.contractAddress !== contractAddress))
-    } else {
-      setSelectedNFTs(contractNFTs)
-    }
-  }
-
-  const handleCreateAuction = async () => {
-    if (!isValidSelection || !title.trim() || !startingPrice || !reservePrice) return
-
-    // Check approval first
-    if (!isApproved) {
-      try {
-        await approveForAuction()
-        return // Wait for approval to complete
-      } catch (error) {
-        console.error('Approval failed:', error)
-        return
+  // ✅ Handle contract selection
+  const handleContractSelect = (contractAddress: string) => {
+    setSelectedContract(contractAddress)
+    setSelectedTokens(new Set())
+    
+    // Auto-generate collection name from first NFT
+    const firstNft = nftsByContract[contractAddress]?.[0]
+    if (firstNft) {
+      setCollectionName(firstNft.collectionName || `${firstNft.name} Collection`)
+      
+      // ✅ Auto-set first NFT image as collection image if enabled
+      if (useFirstNFTImage && firstNft.image) {
+        setCollectionImage(firstNft.image)
+        setImagePreview(firstNft.image)
       }
     }
+  }
 
-    const auctionData: CollectionAuctionData = {
-      nftContract: selectedNFTs[0].contractAddress,
-      tokenIds: selectedNFTs.map(nft => nft.tokenId),
-      startingPrice,
-      reservePrice,
-      minBidIncrement,
-      duration: duration * 3600, // Convert hours to seconds
-      allowPublicReveal,
-      title,
-      description
+  // ✅ Handle token selection
+  const handleTokenSelect = (tokenId: string, checked: boolean) => {
+    const newSelected = new Set(selectedTokens)
+    if (checked) {
+      newSelected.add(tokenId)
+    } else {
+      newSelected.delete(tokenId)
+    }
+    setSelectedTokens(newSelected)
+  }
+
+  // ✅ Handle image file selection
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
     }
 
-    onCreateAuction(auctionData)
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      alert('Image file too large. Please select a file under 10MB.')
+      return
+    }
+
+    setCollectionImageFile(file)
+    setUseFirstNFTImage(false)
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result as string
+      setImagePreview(result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // ✅ Upload image to server
+  const uploadCollectionImage = async (): Promise<{ url: string; driveId?: string }> => {
+    if (useFirstNFTImage && collectionImage) {
+      // Use first NFT image - no upload needed
+      return { url: collectionImage }
+    }
+
+    if (!collectionImageFile) {
+      throw new Error('No image file selected')
+    }
+
+    setIsUploadingImage(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', collectionImageFile)
+      formData.append('type', 'collection')
+      formData.append('name', `collection_${Date.now()}_${collectionName.replace(/\s+/g, '_')}`)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        console.log('✅ Collection image uploaded:', result.url)
+        return { 
+          url: result.url, 
+          driveId: result.driveId 
+        }
+      } else {
+        throw new Error(result.error || 'Failed to upload image')
+      }
+
+    } catch (error) {
+      console.error('❌ Image upload failed:', error)
+      throw error
+    } finally {
+      setIsUploadingImage(false)
+    }
+  }
+
+  // ✅ Validate form
+  const validateForm = (): string[] => {
+    const errors: string[] = []
+
+    if (!selectedContract) errors.push("Please select a collection contract")
+    if (selectedTokens.size < 2) errors.push("Please select at least 2 NFTs for collection auction")
+    if (selectedTokens.size > 100) errors.push("Maximum 100 NFTs allowed per collection auction")
+    if (!collectionName.trim()) errors.push("Collection name is required")
+    if (!title.trim()) errors.push("Auction title is required")
+    if (!startingPrice || parseFloat(startingPrice) <= 0) errors.push("Valid starting price is required")
+    if (!reservePrice || parseFloat(reservePrice) < parseFloat(startingPrice || "0")) {
+      errors.push("Reserve price must be greater than or equal to starting price")
+    }
+    if (!minBidIncrement || parseFloat(minBidIncrement) <= 0) errors.push("Valid minimum bid increment is required")
+    if (duration < 1 || duration > 720) errors.push("Duration must be between 1 and 720 hours")
+    
+    // Image validation
+    if (!useFirstNFTImage && !collectionImageFile && !collectionImage) {
+      errors.push("Please select a collection image or use first NFT image")
+    }
+
+    return errors
+  }
+
+  // ✅ Handle form submission
+  const handleCreateAuction = async () => {
+    const errors = validateForm()
+    setValidationErrors(errors)
+
+    if (errors.length > 0) {
+      setCurrentStep(1) // Go back to first step to show errors
+      return
+    }
+
+    try {
+      // Upload image first
+      const imageData = await uploadCollectionImage()
+
+      const auctionData: CollectionAuctionData = {
+        nftContract: selectedContract,
+        tokenIds: Array.from(selectedTokens),
+        collectionName,
+        collectionDescription,
+        collectionImage: imageData.url,
+        collectionImageDriveId: imageData.driveId,
+        startingPrice,
+        reservePrice,
+        minBidIncrement,
+        duration: duration * 3600, // Convert hours to seconds
+        allowPublicReveal,
+        title,
+        description
+      }
+
+      console.log('🎯 Creating collection auction with data:', auctionData)
+
+      await onCreateAuction(auctionData)
+
+    } catch (error) {
+      console.error('❌ Failed to create collection auction:', error)
+      alert(`Failed to create auction: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // ✅ Auto-fill auction title
+  useEffect(() => {
+    if (collectionName && selectedTokens.size > 0) {
+      setTitle(`${collectionName} Collection Auction (${selectedTokens.size} NFTs)`)
+    }
+  }, [collectionName, selectedTokens.size])
+
+  // ✅ Auto-fill description
+  useEffect(() => {
+    if (collectionName && selectedTokens.size > 0) {
+      setDescription(`Sealed bid auction for a collection of ${selectedTokens.size} NFTs from ${collectionName}. Highest bidder wins the entire collection.`)
+    }
+  }, [collectionName, selectedTokens.size])
+
+  if (contractOptions.length === 0) {
+    return (
+      <div className="p-8 text-center">
+        <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+        <h3 className="text-xl font-semibold mb-2">No NFTs Available</h3>
+        <p className="text-muted-foreground mb-4">
+          You need at least 2 NFTs from the same collection to create a collection auction.
+        </p>
+        <Button onClick={onClose} variant="outline">Close</Button>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <Gavel className="h-6 w-6" />
-          Create Collection Auction
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Gavel className="w-6 h-6" />
+            Create Collection Auction
+          </h2>
+          <p className="text-muted-foreground">
+            Bundle multiple NFTs from the same collection into a single sealed bid auction
+          </p>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          Step {currentStep} of 3
+        </div>
       </div>
 
-      {/* Selection Summary */}
-      {selectedNFTs.length > 0 && (
+      {/* Progress Steps */}
+      <div className="flex items-center space-x-4 mb-6">
+        {[
+          { step: 1, title: "Select NFTs", icon: Package },
+          { step: 2, title: "Collection Details", icon: ImageIcon },
+          { step: 3, title: "Auction Settings", icon: Gavel }
+        ].map(({ step, title, icon: Icon }) => (
+          <div key={step} className="flex items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+              currentStep >= step ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+            }`}>
+              {currentStep > step ? '✓' : step}
+            </div>
+            <span className={`ml-2 text-sm ${currentStep >= step ? 'text-blue-600' : 'text-gray-500'}`}>
+              {title}
+            </span>
+            {step < 3 && <div className="w-8 h-0.5 bg-gray-200 ml-4" />}
+          </div>
+        ))}
+      </div>
+
+      {/* Validation Errors */}
+      {validationErrors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-1">
+              <div className="font-medium">Please fix the following errors:</div>
+              <ul className="list-disc list-inside space-y-1">
+                {validationErrors.map((error, index) => (
+                  <li key={index} className="text-sm">{error}</li>
+                ))}
+              </ul>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Step 1: Select NFTs */}
+      {currentStep === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Selected NFTs ({selectedNFTs.length})</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Select NFT Collection
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-4 gap-2 max-h-32 overflow-y-auto">
-              {selectedNFTs.map(nft => (
-                <div key={nft.id} className="relative">
-                  <Image
-                    src={nft.image}
-                    alt={nft.name}
-                    width={60}
-                    height={60}
-                    className="rounded-lg object-cover"
-                  />
-                  <Badge className="absolute -top-1 -right-1 text-xs px-1">
-                    #{nft.tokenId}
-                  </Badge>
+          <CardContent className="space-y-6">
+            {/* Contract Selection */}
+            <div>
+              <Label>Choose Collection Contract</Label>
+              <Select value={selectedContract} onValueChange={handleContractSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select NFT collection contract" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contractOptions.map(([contractAddress, contractNfts]) => (
+                    <SelectItem key={contractAddress} value={contractAddress}>
+                      <div className="flex items-center gap-2">
+                        <span>{contractNfts[0]?.collectionName || 'Unknown Collection'}</span>
+                        <Badge variant="secondary">{contractNfts.length} NFTs</Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* NFT Selection */}
+            {selectedContract && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <Label>Select NFTs ({selectedTokens.size} selected)</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedTokens(new Set(selectedContractNfts.map(nft => nft.tokenId)))}
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedTokens(new Set())}
+                    >
+                      Clear All
+                    </Button>
+                  </div>
                 </div>
-              ))}
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-96 overflow-y-auto">
+                  {selectedContractNfts.map((nft) => (
+                    <div key={nft.tokenId} className="relative">
+                      <div className={`border-2 rounded-lg overflow-hidden cursor-pointer transition-all ${
+                        selectedTokens.has(nft.tokenId)
+                          ? 'border-blue-500 ring-2 ring-blue-200'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}>
+                        <div className="aspect-square relative">
+                          <Image
+                            src={nft.image || '/placeholder-nft.jpg'}
+                            alt={nft.name}
+                            fill
+                            className="object-cover"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <Checkbox
+                              checked={selectedTokens.has(nft.tokenId)}
+                              onCheckedChange={(checked) => handleTokenSelect(nft.tokenId, !!checked)}
+                              className="bg-white"
+                            />
+                          </div>
+                        </div>
+                        <div className="p-2">
+                          <div className="font-medium text-sm truncate">{nft.name}</div>
+                          <div className="text-xs text-muted-foreground">#{nft.tokenId}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button 
+                onClick={() => setCurrentStep(2)}
+                disabled={selectedTokens.size < 2}
+              >
+                Next: Collection Details
+              </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* NFT Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Select NFTs for Auction</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {contractAddresses.map(contractAddress => (
-            <div key={contractAddress} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">
-                  Contract: {contractAddress.slice(0, 6)}...{contractAddress.slice(-4)}
-                </Label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSelectAllFromContract(contractAddress)}
-                >
-                  Select All ({nftsByContract[contractAddress].length})
-                </Button>
-              </div>
-              
-              <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto">
-                {nftsByContract[contractAddress].map(nft => (
-                  <div key={nft.id} className="relative">
-                    <div className="aspect-square relative">
-                      <Image
-                        src={nft.image}
-                        alt={nft.name}
-                        fill
-                        className="rounded-lg object-cover"
-                      />
-                      <Checkbox
-                        checked={selectedNFTs.some(selected => selected.id === nft.id)}
-                        onCheckedChange={(checked) => handleNFTToggle(nft, checked as boolean)}
-                        className="absolute top-1 right-1 bg-white"
-                      />
-                    </div>
-                    <Badge className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 text-xs">
-                      #{nft.tokenId}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Auction Details */}
-      {isValidSelection && (
+      {/* Step 2: Collection Details */}
+      {currentStep === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle>Auction Details</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="w-5 h-5" />
+              Collection Details
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="title">Auction Title *</Label>
-                <Input
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Enter auction title"
-                />
-              </div>
-              <div>
-                <Label htmlFor="duration">Duration (hours)</Label>
-                <Input
-                  id="duration"
-                  type="number"
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                  min="1"
-                  max="720"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="startingPrice">Starting Price (ROSE) *</Label>
-                <Input
-                  id="startingPrice"
-                  type="number"
-                  step="0.01"
-                  value={startingPrice}
-                  onChange={(e) => setStartingPrice(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <Label htmlFor="reservePrice">Reserve Price (ROSE) *</Label>
-                <Input
-                  id="reservePrice"
-                  type="number"
-                  step="0.01"
-                  value={reservePrice}
-                  onChange={(e) => setReservePrice(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
+          <CardContent className="space-y-6">
+            {/* Collection Name */}
             <div>
-              <Label htmlFor="minBidIncrement">Minimum Bid Increment (ROSE)</Label>
+              <Label htmlFor="collection-name">Collection Name *</Label>
               <Input
-                id="minBidIncrement"
-                type="number"
-                step="0.01"
-                value={minBidIncrement}
-                onChange={(e) => setMinBidIncrement(e.target.value)}
-                placeholder="0.1"
+                id="collection-name"
+                value={collectionName}
+                onChange={(e) => setCollectionName(e.target.value)}
+                placeholder="Enter collection name"
               />
             </div>
 
+            {/* Collection Description */}
             <div>
-              <Label htmlFor="description">Description</Label>
-              <textarea
+              <Label htmlFor="collection-description">Collection Description</Label>
+              <Textarea
+                id="collection-description"
+                value={collectionDescription}
+                onChange={(e) => setCollectionDescription(e.target.value)}
+                placeholder="Describe your NFT collection..."
+                rows={3}
+              />
+            </div>
+
+            {/* Collection Image Selection */}
+            <div>
+              <Label>Collection Representative Image *</Label>
+              
+              {/* Image source option */}
+              <div className="mt-2 space-y-4">
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="use-first-nft"
+                    checked={useFirstNFTImage}
+                    onCheckedChange={(checked) => {
+                      setUseFirstNFTImage(!!checked)
+                      if (checked && selectedContractNfts[0]?.image) {
+                        setCollectionImage(selectedContractNfts[0].image)
+                        setImagePreview(selectedContractNfts[0].image)
+                        setCollectionImageFile(null)
+                      }
+                    }}
+                  />
+                  <Label htmlFor="use-first-nft" className="text-sm">
+                    Use first NFT image as collection image
+                  </Label>
+                </div>
+
+                {!useFirstNFTImage && (
+                  <div>
+                    <Label htmlFor="collection-image">Upload Custom Image</Label>
+                    <div className="mt-2">
+                      <input
+                        id="collection-image"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => document.getElementById('collection-image')?.click()}
+                        className="w-full"
+                        disabled={isUploadingImage}
+                      >
+                        {isUploadingImage ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Select Image
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Image Preview */}
+                {imagePreview && (
+                  <div>
+                    <Label>Preview</Label>
+                    <div className="mt-2 w-32 h-32 border rounded-lg overflow-hidden">
+                      <Image
+                        src={imagePreview}
+                        alt="Collection preview"
+                        width={128}
+                        height={128}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                Back
+              </Button>
+              <Button 
+                onClick={() => setCurrentStep(3)}
+                disabled={!collectionName.trim() || (!useFirstNFTImage && !collectionImageFile && !collectionImage)}
+              >
+                Next: Auction Settings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 3: Auction Settings */}
+      {currentStep === 3 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gavel className="w-5 h-5" />
+              Auction Parameters
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Auction Title */}
+            <div>
+              <Label htmlFor="title">Auction Title *</Label>
+              <Input
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Enter auction title"
+              />
+            </div>
+
+            {/* Auction Description */}
+            <div>
+              <Label htmlFor="description">Auction Description</Label>
+              <Textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full p-2 border rounded-md"
+                placeholder="Describe your auction..."
                 rows={3}
-                placeholder="Describe your collection auction..."
               />
             </div>
 
-            {/* Public Reveal Option - Made more prominent */}
+            {/* Pricing */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="starting-price">Starting Price (ROSE) *</Label>
+                <Input
+                  id="starting-price"
+                  type="number"
+                  step="0.001"
+                  value={startingPrice}
+                  onChange={(e) => setStartingPrice(e.target.value)}
+                  placeholder="0.0"
+                />
+              </div>
+              <div>
+                <Label htmlFor="reserve-price">Reserve Price (ROSE) *</Label>
+                <Input
+                  id="reserve-price"
+                  type="number"
+                  step="0.001"
+                  value={reservePrice}
+                  onChange={(e) => setReservePrice(e.target.value)}
+                  placeholder="0.0"
+                />
+              </div>
+              <div>
+                <Label htmlFor="min-increment">Min Bid Increment (ROSE) *</Label>
+                <Input
+                  id="min-increment"
+                  type="number"
+                  step="0.001"
+                  value={minBidIncrement}
+                  onChange={(e) => setMinBidIncrement(e.target.value)}
+                  placeholder="0.1"
+                />
+              </div>
+            </div>
+
+            {/* Duration */}
+            <div>
+              <Label htmlFor="duration">Auction Duration (hours) *</Label>
+              <Select value={duration.toString()} onValueChange={(value) => setDuration(parseInt(value))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 hour</SelectItem>
+                  <SelectItem value="6">6 hours</SelectItem>
+                  <SelectItem value="12">12 hours</SelectItem>
+                  <SelectItem value="24">24 hours (1 day)</SelectItem>
+                  <SelectItem value="48">48 hours (2 days)</SelectItem>
+                  <SelectItem value="72">72 hours (3 days)</SelectItem>
+                  <SelectItem value="168">168 hours (1 week)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Public Reveal Option */}
             <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
               <div className="flex items-start space-x-3">
                 <Checkbox
                   id="allowPublicReveal"
                   checked={allowPublicReveal}
-                  onCheckedChange={(checked) => setAllowPublicReveal(checked === true)}
+                  onCheckedChange={(checked) => setAllowPublicReveal(!!checked)}
                   className="mt-1"
                 />
                 <div className="flex-1">
-                  <Label htmlFor="allowPublicReveal" className="font-medium text-blue-900">
+                  <Label htmlFor="allowPublicReveal" className="font-medium text-blue-900 flex items-center gap-2">
+                    {allowPublicReveal ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                     Allow Public Bid History
                   </Label>
                   <p className="text-sm text-blue-700 mt-1">
@@ -317,92 +680,45 @@ export default function AuctionCollectionSelector({ nfts, onClose, onCreateAucti
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Validation Alerts */}
-      {selectedNFTs.length > 0 && !isValidSelection && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Please select at least 2 NFTs from the same contract to create a collection auction.
-          </AlertDescription>
-        </Alert>
-      )}
+            {/* Summary */}
+            <div className="bg-muted rounded-lg p-4">
+              <h4 className="font-medium mb-2">Auction Summary</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>Collection: <span className="font-medium">{collectionName}</span></div>
+                <div>NFTs: <span className="font-medium">{selectedTokens.size}</span></div>
+                <div>Starting Price: <span className="font-medium">{startingPrice} ROSE</span></div>
+                <div>Reserve Price: <span className="font-medium">{reservePrice} ROSE</span></div>
+                <div>Duration: <span className="font-medium">{duration} hours</span></div>
+                <div>Public Reveal: <span className="font-medium">{allowPublicReveal ? 'Enabled' : 'Disabled'}</span></div>
+              </div>
+            </div>
 
-      {/* Approval Status */}
-      {selectedContract && isValidSelection && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Contract Approval Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              {isApproved ? (
-                <>
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="text-green-600 font-medium">
-                    Contract approved for auction
-                  </span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="h-5 w-5 text-orange-600" />
-                  <span className="text-orange-600 font-medium">
-                    Contract needs approval for auction
-                  </span>
-                </>
-              )}
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                Back
+              </Button>
+              <Button 
+                onClick={handleCreateAuction}
+                disabled={isLoading || isUploadingImage}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Creating Auction...
+                  </>
+                ) : (
+                  <>
+                    <Gavel className="w-4 h-4 mr-2" />
+                    Create Collection Auction
+                  </>
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>
       )}
-
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        
-        {selectedContract && isValidSelection && !isApproved ? (
-          <Button
-            onClick={approveForAuction}
-            disabled={isApprovalPending || isApprovalConfirming || isLoading}
-            className="bg-blue-600 text-white hover:bg-blue-700"
-          >
-            {isApprovalPending || isApprovalConfirming ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {isApprovalPending ? 'Approve...' : 'Confirming...'}
-              </>
-            ) : (
-              <>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Approve for Auction
-              </>
-            )}
-          </Button>
-        ) : (
-          <Button
-            onClick={handleCreateAuction}
-            disabled={!isValidSelection || !title.trim() || !startingPrice || !reservePrice || isLoading || !isApproved}
-            className="bg-green-600 text-white hover:bg-green-700"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating Auction...
-              </>
-            ) : (
-              <>
-                <Gavel className="h-4 w-4 mr-2" />
-                Create Collection Auction
-              </>
-            )}
-          </Button>
-        )}
-      </div>
     </div>
   )
 }

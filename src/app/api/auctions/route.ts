@@ -179,6 +179,17 @@ async function createAuction(data: CreateAuctionData) {
       individualNfts: individualNftMetadata || []
     } : nftMetadata
 
+    // ✅ DEBUG: Log metadata construction
+    console.log('🔍 DEBUG API finalMetadata construction:', {
+      auctionType,
+      nftMetadata,
+      individualNftMetadata,
+      finalMetadata,
+      individualNftsCount: finalMetadata && typeof finalMetadata === 'object' && 'individualNfts' in finalMetadata 
+        ? (finalMetadata.individualNfts as any[])?.length || 0 
+        : 0
+    })
+
     const result = await pool.query(query, [
       auctionId,
       auctionType,

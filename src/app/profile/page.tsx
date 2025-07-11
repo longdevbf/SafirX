@@ -1125,9 +1125,40 @@ export default function ProfilePage() {
             // Collection auction (stored in window for retrieval)
             const collectionData = (window as any).pendingAuctionData
             if (collectionData) {
+              // ✅ FALLBACK: Get NFT metadata from contract NFTs if main nfts array doesn't have data
+              const selectedContractNfts = nfts.filter(n => 
+                n.contractAddress.toLowerCase() === collectionData.nftContract.toLowerCase()
+              )
+              
+              console.log('🔍 DEBUG contract NFTs:', {
+                contractAddress: collectionData.nftContract,
+                totalContractNfts: selectedContractNfts.length,
+                selectedTokenIds: collectionData.tokenIds,
+                contractNftTokenIds: selectedContractNfts.map(n => n.tokenId)
+              })
+              
               // Get individual NFT metadata for collection
               const individualNftMetadata = collectionData.tokenIds.map((tokenId: string) => {
-                const nft = nfts.find(n => n.tokenId === tokenId && n.contractAddress === collectionData.nftContract)
+                // ✅ FIXED: Case-insensitive contract address matching
+                const nft = nfts.find(n => 
+                  n.contractAddress.toLowerCase() === collectionData.nftContract.toLowerCase() && 
+                  n.tokenId === tokenId
+                )
+                
+                // ✅ DEBUG: Log NFT finding process
+                console.log('🔍 DEBUG NFT finding:', {
+                  tokenId,
+                  nftContract: collectionData.nftContract,
+                  foundNft: nft ? {
+                    name: nft.name,
+                    image: nft.image,
+                    description: nft.description
+                  } : null,
+                  totalNfts: nfts.length,
+                  availableTokenIds: nfts.map(n => n.tokenId).slice(0, 5), // Show first 5 for debugging
+                  contractMatches: nfts.filter(n => n.contractAddress.toLowerCase() === collectionData.nftContract.toLowerCase()).length
+                })
+                
                 return {
                   tokenId,
                   name: nft?.name || `NFT #${tokenId}`,
@@ -1136,6 +1167,12 @@ export default function ProfilePage() {
                   attributes: nft?.attributes || [],
                   rarity: nft?.rarity || 'Common'
                 }
+              })
+
+              // ✅ DEBUG: Log final individual metadata
+              console.log('🔍 DEBUG final individualNftMetadata:', {
+                count: individualNftMetadata.length,
+                metadata: individualNftMetadata
               })
 
               auctionDataForDb = prepareAuctionData(

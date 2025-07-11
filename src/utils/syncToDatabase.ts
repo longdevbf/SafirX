@@ -117,6 +117,13 @@ export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<bool
   try {
     console.log('🔄 Syncing auction to database:', data.auction_id)
     
+    // ✅ DEBUG: Log the individual_nft_metadata
+    console.log('🔍 DEBUG individual_nft_metadata:', {
+      is_collection: data.is_collection,
+      individual_nft_metadata: data.individual_nft_metadata,
+      individual_count: data.individual_nft_metadata?.length || 0
+    })
+    
     // Transform data to match API expectations
     const apiData = {
       action: 'create',
@@ -153,6 +160,13 @@ export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<bool
       individualNftMetadata: data.individual_nft_metadata || [],
       creationTxHash: data.tx_hash
     }
+    
+    // ✅ DEBUG: Log the final nftMetadata
+    console.log('🔍 DEBUG final nftMetadata:', {
+      auctionType: apiData.auctionType,
+      nftMetadata: apiData.nftMetadata,
+      individualNftMetadata: apiData.individualNftMetadata
+    })
     
     console.log('📊 Syncing auction with transformed data:', {
       auctionId: apiData.auctionId,

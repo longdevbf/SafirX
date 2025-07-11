@@ -167,9 +167,9 @@ async function createAuction(data: CreateAuctionData) {
         collection_image_url, collection_image_drive_id,
         starting_price, reserve_price, min_bid_increment,
         start_time, end_time, duration_hours, allow_public_reveal,
-        nft_metadata, creation_tx_hash, state
+        nft_metadata, nft_metadata_individuals, creation_tx_hash, state
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'ACTIVE'
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'ACTIVE'
       ) RETURNING *
     `
 
@@ -213,6 +213,7 @@ async function createAuction(data: CreateAuctionData) {
       durationHours,
       allowPublicReveal,
       finalMetadata ? JSON.stringify(finalMetadata) : null,
+      individualNftMetadata && individualNftMetadata.length > 0 ? JSON.stringify(individualNftMetadata) : null,
       creationTxHash
     ])
 

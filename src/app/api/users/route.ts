@@ -97,9 +97,9 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
     }
   }
   
-  // Method 3: Try converting to base64 only if image is very small (< 100KB)
+  // Method 3: Try converting to base64 only if image is very small (< 50KB)
   // This prevents database issues with overly long base64 strings
-  if (file.size < 100 * 1024) {
+  if (file.size < 50 * 1024) {
     try {
       console.log('🔄 Trying base64 conversion fallback...')
       const buffer = Buffer.from(await file.arrayBuffer())
@@ -108,7 +108,7 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
       const dataUrl = `data:${mimeType};base64,${base64}`
       
       // Additional check: ensure the base64 URL isn't too long for practical use
-      if (dataUrl.length < 50000) {
+      if (dataUrl.length < 25000) {
         console.log('✅ Base64 conversion successful')
         return dataUrl
       } else {
@@ -118,7 +118,7 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
       console.error('❌ Base64 conversion failed:', base64Error)
     }
   } else {
-    console.log('⚠️ Image too large for base64 fallback (>100KB)')
+    console.log('⚠️ Image too large for base64 fallback (>50KB)')
   }
   
   // Method 4: Use placeholder image as final fallback

@@ -6,7 +6,7 @@ const nextConfig = {
   images: {
     domains: [
       'gateway.pinata.cloud',
-      'lavender-left-hookworm-315.mypinata.cloud', // Add your Pinata gateway
+      'lavender-left-hookworm-315.mypinata.cloud', // Your working Pinata gateway
       'ipfs.io',
       'cloudflare-ipfs.com',
       'nftstorage.link',
@@ -15,8 +15,7 @@ const nextConfig = {
       'drive.google.com',
       'lh3.googleusercontent.com',
       'docs.google.com',
-      'dummyimage.com',
-      'res.cloudinary.com' // Cloudinary CDN
+      'dummyimage.com'
     ],
     remotePatterns: [
       {

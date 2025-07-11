@@ -8,18 +8,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-//import { History, Crown, ExternalLink, Copy, Eye, Loader2, Lock, AlertCircle } from "lucide-react"
+
 import { formatEther } from "viem"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useEffect, useCallback } from "react"
 import { usePublicClient } from "wagmi"
 import { SEALED_BID_AUCTION_CONFIG } from "@/abis/AuctionSealedBid"
-//import { Button } from "@/components/ui/button"
+
 
 import { History, Crown, Eye, Loader2, Lock, AlertCircle } from "lucide-react"
-//import { formatEther } from "viem"
-//import { Alert, AlertDescription } from "@/components/ui/alert"
-//import { useEffect, useCallback } from "react"
+
 interface PublicBid {
   bidder: string
   amount: bigint
@@ -38,7 +36,6 @@ interface BidHistoryDialogProps {
   userAddress?: string
 }
 
-// Helper function to format address
 function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
@@ -55,7 +52,6 @@ export function BidHistoryDialog({
 }: BidHistoryDialogProps) {
   const publicClient = usePublicClient()
   
-  // ✅ Hook is called at the top level of this component
   const { 
     auction: auctionDetail, 
     publicBids, 
@@ -64,7 +60,7 @@ export function BidHistoryDialog({
     refetchBids 
   } = useAuctionDetail(auction.auctionId.toString())
   console.log(auctionDetail);
-  // ✅ Refresh bid history when dialog opens for finalized auctions
+
   useEffect(() => {
     if (isOpen && (auction.isFinalized || (!auction.isActive && auction.state !== 2))) {
       console.log(`🔄 Dialog opened for auction ${auction.auctionId}, refreshing bid history...`)
@@ -81,8 +77,7 @@ export function BidHistoryDialog({
       refetchBids()
     }
   }, [isOpen, auction.isFinalized, auction.isActive, auction.state, auction.auctionId, refetchBids])
-  
-  // ✅ Log public bids whenever they change
+   // ✅ Log public bids whenever they change
   useEffect(() => {
     console.log(`📈 Public bids updated for auction ${auction.auctionId}:`, {
       bidsCount: publicBids?.length || 0,

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { userQueries } from '@/lib/db' // Uncomment this
-import { uploadToCloudinary, isCloudinaryConfigured } from '@/services/cloudinary'
+import { uploadToPinata, isPinataConfigured } from '@/services/pinata'
 
 // Google Drive setup with better error handling
 let drive: ReturnType<typeof google.drive> | null = null // Fix: Replace 'any' with proper type
@@ -60,25 +60,25 @@ async function testGoogleDriveAccess(): Promise<boolean> {
   }
 }
 
-// Enhanced upload function with Cloudinary as primary method
+// Enhanced upload function with Pinata IPFS as primary method
 async function uploadImageWithFallback(file: File, fileName: string, isProfile: boolean = false): Promise<string> {
   console.log(`Processing image upload: ${fileName} (${(file.size / 1024).toFixed(1)}KB)`)
   
-  // Method 1: Try Cloudinary first (most reliable)
-  if (isCloudinaryConfigured()) {
+  // Method 1: Try Pinata IPFS first (most reliable for NFT marketplace)
+  if (isPinataConfigured()) {
     try {
-      const result = await uploadToCloudinary(file, fileName, isProfile)
+      const result = await uploadToPinata(file, fileName, isProfile)
       if (result.success && result.url) {
-        console.log('✅ Cloudinary upload successful:', result.url)
+        console.log('✅ Pinata IPFS upload successful:', result.url)
         return result.url
       } else {
-        console.error('❌ Cloudinary upload failed:', result.error)
+        console.error('❌ Pinata IPFS upload failed:', result.error)
       }
     } catch (error) {
-      console.error('❌ Cloudinary upload error:', error)
+      console.error('❌ Pinata IPFS upload error:', error)
     }
   } else {
-    console.log('⚠️ Cloudinary not configured, skipping to next method')
+    console.log('⚠️ Pinata not configured, skipping to next method')
   }
   
   // Method 2: Try Google Drive (with shared drive support)

@@ -11,30 +11,128 @@ interface NFTMetadata {
   unlockable_content?: string
   explicit_content?: boolean
 }
-export class UploadService {
-  private static async uploadToPinata(file: File): Promise<string> {
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
+/**
+ * Pinata IPFS Upload Service
+ * Using existing JWT and gateway from .env
+ */
 
-      const response = await fetch('/api/upload-ipfs', {
-        method: 'POST',
-        body: formData,
-      })
+export interface PinataUploadResult {
+  success: boolean
+  url?: string
+  ipfsHash?: string
+  error?: string
+}
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('IPFS upload API response:', response.status, errorData)
-        throw new Error(`IPFS upload failed: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log('IPFS upload successful:', data)
-      return data.ipfsUrl // API trả về IPFS URL thật sự
-    } catch (error) {
-      console.error('IPFS upload error:', error)
-      throw error
+export async function uploadToPinata(
+  file: File, 
+  fileName: string,
+  isProfile: boolean = false
+): Promise<PinataUploadResult> {
+  try {
+    console.log(`📤 Uploading to Pinata IPFS: ${fileName} (${(file.size / 1024).toFixed(1)}KB)`)
+    
+    // Check if Pinata JWT is configured
+    if (!process.env.JWT) {
+      throw new Error('Pinata JWT not configured')
     }
+
+    // Create form data for Pinata API
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    // Add metadata
+    const metadata = {
+      name: fileName,
+      keyvalues: {
+        type: isProfile ? 'profile' : 'banner',
+        uploadedAt: new Date().toISOString(),
+        size: file.size.toString()
+      }
+    }
+    formData.append('pinataMetadata', JSON.stringify(metadata))
+    
+    // Add pinning options
+    const pinataOptions = {
+      cidVersion: 1,
+      customPinPolicy: {
+        regions: [
+          { id: 'FRA1', desiredReplicationCount: 1 },
+          { id: 'NYC1', desiredReplicationCount: 1 }
+        ]
+      }
+    }
+    formData.append('pinataOptions', JSON.stringify(pinataOptions))
+
+    // Upload to Pinata
+    const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.JWT}`,
+      },
+      body: formData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Pinata upload failed: ${response.status} ${errorData}`)
+    }
+
+    const result = await response.json()
+    
+    // Use custom gateway if available, otherwise use default
+    // Fix typo in gateway URL if present
+    let gateway = process.env.GATEWAY || 'gateway.pinata.cloud'
+    if (gateway.endsWith('.clouda')) {
+      gateway = gateway.replace('.clouda', '.cloud')
+    }
+    const imageUrl = `https://${gateway}/ipfs/${result.IpfsHash}`
+    
+    console.log('✅ Pinata upload successful:', imageUrl)
+    
+    return {
+      success: true,
+      url: imageUrl,
+      ipfsHash: result.IpfsHash
+    }
+    
+  } catch (error) {
+    console.error('❌ Pinata upload failed:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown Pinata error'
+    }
+  }
+}
+
+export function isPinataConfigured(): boolean {
+  return !!process.env.JWT
+}
+
+export async function testPinataConnection(): Promise<boolean> {
+  try {
+    if (!process.env.JWT) return false
+    
+    const response = await fetch('https://api.pinata.cloud/data/testAuthentication', {
+      headers: {
+        'Authorization': `Bearer ${process.env.JWT}`
+      }
+    })
+    
+    return response.ok
+  } catch (error) {
+    console.error('Pinata connection test failed:', error)
+    return false
+  }
+}
+
+export class UploadService {
+  // Use the new uploadToPinata function directly
+  private static async uploadToPinata(file: File): Promise<string> {
+    const result = await uploadToPinata(file, file.name, false)
+    if (result.success && result.url) {
+      return result.url
+    }
+    throw new Error(result.error || 'Upload failed')
   }
 
   // Public method để upload file lên IPFS

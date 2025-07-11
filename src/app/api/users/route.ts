@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { userQueries } from '@/lib/db' // Uncomment this
+import { uploadToCloudinary, isCloudinaryConfigured } from '@/services/cloudinary'
 
 // Google Drive setup with better error handling
 let drive: ReturnType<typeof google.drive> | null = null // Fix: Replace 'any' with proper type
@@ -59,11 +60,28 @@ async function testGoogleDriveAccess(): Promise<boolean> {
   }
 }
 
-// Enhanced upload function with better error handling and fallback
+// Enhanced upload function with Cloudinary as primary method
 async function uploadImageWithFallback(file: File, fileName: string, isProfile: boolean = false): Promise<string> {
   console.log(`Processing image upload: ${fileName} (${(file.size / 1024).toFixed(1)}KB)`)
   
-  // Try Google Drive first (with shared drive support)
+  // Method 1: Try Cloudinary first (most reliable)
+  if (isCloudinaryConfigured()) {
+    try {
+      const result = await uploadToCloudinary(file, fileName, isProfile)
+      if (result.success && result.url) {
+        console.log('✅ Cloudinary upload successful:', result.url)
+        return result.url
+      } else {
+        console.error('❌ Cloudinary upload failed:', result.error)
+      }
+    } catch (error) {
+      console.error('❌ Cloudinary upload error:', error)
+    }
+  } else {
+    console.log('⚠️ Cloudinary not configured, skipping to next method')
+  }
+  
+  // Method 2: Try Google Drive (with shared drive support)
   if (driveConfigured && drive) {
     try {
       const imageUrl = await uploadToGoogleDrive(file, fileName, isProfile)
@@ -79,7 +97,7 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
     }
   }
   
-  // Fallback 1: Try converting to base64 only if image is very small (< 100KB)
+  // Method 3: Try converting to base64 only if image is very small (< 100KB)
   // This prevents database issues with overly long base64 strings
   if (file.size < 100 * 1024) {
     try {
@@ -103,7 +121,7 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
     console.log('⚠️ Image too large for base64 fallback (>100KB)')
   }
   
-  // Fallback 2: Use placeholder image
+  // Method 4: Use placeholder image as final fallback
   const placeholderUrl = isProfile 
     ? `https://api.dicebear.com/7.x/identicon/svg?seed=${fileName}&size=400&backgroundColor=random`
     : `https://dummyimage.com/1200x300/6366f1/ffffff.png&text=Banner+Image`

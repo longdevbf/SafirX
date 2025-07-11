@@ -15,7 +15,8 @@ const nextConfig = {
       'drive.google.com',
       'lh3.googleusercontent.com',
       'docs.google.com',
-      'dummyimage.com'
+      'dummyimage.com',
+      'res.cloudinary.com' // Cloudinary CDN
     ],
     remotePatterns: [
       {

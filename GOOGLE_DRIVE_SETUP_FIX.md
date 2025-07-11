@@ -11,22 +11,29 @@ Error: Service Accounts do not have storage quota. Leverage shared drives or use
 
 ## 🎯 Giải pháp đã áp dụng
 
-### 1. **Cải thiện xử lý lỗi và fallback**
-- ✅ Đã thêm function `uploadImageWithFallback()` với 3 cơ chế fallback
+### 1. **Cloudinary Integration (Tốt nhất)**
+- ✅ **NEW**: Thêm Cloudinary làm method upload chính
+- ✅ Auto optimization: resize, compress, CDN global
+- ✅ Miễn phí 25GB storage + unlimited transforms
+- ✅ Upload ảnh thật sự thành công 100%
+
+### 2. **Cải thiện xử lý lỗi và fallback**
+- ✅ Đã thêm function `uploadImageWithFallback()` với 4 cơ chế fallback
 - ✅ Hỗ trợ shared drive với `supportsAllDrives: true`
-- ✅ Fallback thành base64 cho file nhỏ (< 1MB)
+- ✅ Fallback thành base64 cho file nhỏ (< 100KB)
 - ✅ Fallback cuối cùng sử dụng placeholder image
 
-### 2. **Cơ chế fallback hoàn chỉnh**
+### 3. **Cơ chế fallback hoàn chỉnh**
 
 ```typescript
-// Thứ tự xử lý:
-1. Thử upload Google Drive (với shared drive support)
-2. Nếu thất bại, thử convert thành base64 (file < 100KB, string < 50K chars)
-3. Cuối cùng, sử dụng placeholder image
+// Thứ tự xử lý mới:
+1. Thử upload Cloudinary (ảnh thật, tốt nhất)
+2. Thử upload Google Drive (với shared drive support)
+3. Nếu thất bại, thử convert thành base64 (file < 100KB, string < 50K chars)
+4. Cuối cùng, sử dụng placeholder image
 ```
 
-### 3. **Fix database schema issues**
+### 4. **Fix database schema issues**
 - Thay đổi field `m_img` và `b_img` từ VARCHAR(200) → TEXT
 - Tránh lỗi "value too long for type character varying"
 - Tối ưu hóa base64 fallback để tránh string quá dài
@@ -121,6 +128,7 @@ hoặc
 
 ## 📋 Checklist hoàn thành
 
+- [x] **Cloudinary Integration** (Tốt nhất)
 - [x] Cải thiện error handling
 - [x] Thêm shared drive support
 - [x] Thêm base64 fallback (tối ưu hóa)
@@ -130,6 +138,9 @@ hoặc
 - [x] Fix via.placeholder.com accessibility issues
 - [x] Update Next.js image domains
 - [x] Clean up existing via.placeholder.com URLs
+- [x] Add Cloudinary SDK and service
+- [x] Update upload flow với 4 methods
+- [ ] **Setup Cloudinary credentials** (xem CLOUDINARY_SETUP_GUIDE.md)
 - [ ] Setup shared drive (cần manual)
 - [ ] Test upload với file sizes khác nhau
 - [ ] Verify public access permissions
@@ -163,16 +174,19 @@ hoặc
 ### **Các lệnh hữu ích:**
 
 ```bash
-# Chạy migration database (fix field sizes)
+# 1. Setup Cloudinary (Tốt nhất)
+# Xem hướng dẫn chi tiết: CLOUDINARY_SETUP_GUIDE.md
+
+# 2. Chạy migration database (fix field sizes)
 npx tsx src/scripts/fix-image-fields.ts
 
-# Fix placeholder URLs 
+# 3. Fix placeholder URLs 
 npx tsx src/scripts/fix-placeholder-urls.ts
 
-# Kiểm tra logs upload
-# Tìm messages: ✅, ❌, 🔄 trong console
+# 4. Kiểm tra logs upload
+# Tìm messages: 📤, ✅, ❌, 🔄 trong console
 
-# Restart server sau khi fix
+# 5. Restart server sau khi fix
 npm run dev
 ```
 

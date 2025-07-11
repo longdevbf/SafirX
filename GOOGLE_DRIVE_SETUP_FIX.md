@@ -22,9 +22,14 @@ Error: Service Accounts do not have storage quota. Leverage shared drives or use
 ```typescript
 // Thứ tự xử lý:
 1. Thử upload Google Drive (với shared drive support)
-2. Nếu thất bại, thử convert thành base64 (file < 1MB)
+2. Nếu thất bại, thử convert thành base64 (file < 100KB, string < 50K chars)
 3. Cuối cùng, sử dụng placeholder image
 ```
+
+### 3. **Fix database schema issues**
+- Thay đổi field `m_img` và `b_img` từ VARCHAR(200) → TEXT
+- Tránh lỗi "value too long for type character varying"
+- Tối ưu hóa base64 fallback để tránh string quá dài
 
 ## 🔧 Các bước setup để hoàn toàn fix lỗi
 
@@ -118,8 +123,10 @@ hoặc
 
 - [x] Cải thiện error handling
 - [x] Thêm shared drive support
-- [x] Thêm base64 fallback
+- [x] Thêm base64 fallback (tối ưu hóa)
 - [x] Thêm placeholder fallback
+- [x] Fix database schema (VARCHAR → TEXT)
+- [x] Tối ưu hóa base64 fallback (< 100KB, < 50K chars)
 - [ ] Setup shared drive (cần manual)
 - [ ] Test upload với file sizes khác nhau
 - [ ] Verify public access permissions
@@ -128,21 +135,40 @@ hoặc
 
 ### **Nếu vẫn gặp lỗi:**
 
-1. **Kiểm tra permissions:**
+1. **Lỗi database "value too long":**
+   ```bash
+   # Chạy migration để fix schema
+   npx tsx src/scripts/fix-image-fields.ts
+   ```
+
+2. **Kiểm tra permissions:**
    ```bash
    # Đảm bảo Service Account có quyền trên shared drive
    ```
 
-2. **Kiểm tra environment variables:**
+3. **Kiểm tra environment variables:**
    ```bash
    echo $GOOGLE_DRIVE_CLIENT_EMAIL
    echo $GOOGLE_DRIVE_FOLDER_ID
    ```
 
-3. **Test với file nhỏ:**
+4. **Test với file nhỏ:**
    ```bash
-   # Thử upload file < 1MB để test base64 fallback
+   # Thử upload file < 100KB để test base64 fallback
    ```
+
+### **Các lệnh hữu ích:**
+
+```bash
+# Chạy migration database
+npx tsx src/scripts/fix-image-fields.ts
+
+# Kiểm tra logs upload
+# Tìm messages: ✅, ❌, 🔄 trong console
+
+# Reset user images về placeholder
+# (có thể thêm vào migration script nếu cần)
+```
 
 ## 📞 Liên hệ support
 

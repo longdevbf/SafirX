@@ -79,8 +79,9 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
     }
   }
   
-  // Fallback 1: Try converting to base64 if image is small enough (< 1MB)
-  if (file.size < 1024 * 1024) {
+  // Fallback 1: Try converting to base64 only if image is very small (< 100KB)
+  // This prevents database issues with overly long base64 strings
+  if (file.size < 100 * 1024) {
     try {
       console.log('🔄 Trying base64 conversion fallback...')
       const buffer = Buffer.from(await file.arrayBuffer())
@@ -88,13 +89,18 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
       const mimeType = file.type || 'image/jpeg'
       const dataUrl = `data:${mimeType};base64,${base64}`
       
-      console.log('✅ Base64 conversion successful')
-      return dataUrl
+      // Additional check: ensure the base64 URL isn't too long for practical use
+      if (dataUrl.length < 50000) {
+        console.log('✅ Base64 conversion successful')
+        return dataUrl
+      } else {
+        console.log('⚠️ Base64 string too long, using placeholder instead')
+      }
     } catch (base64Error) {
       console.error('❌ Base64 conversion failed:', base64Error)
     }
   } else {
-    console.log('⚠️ Image too large for base64 fallback (>1MB)')
+    console.log('⚠️ Image too large for base64 fallback (>100KB)')
   }
   
   // Fallback 2: Use placeholder image

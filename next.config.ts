@@ -10,11 +10,12 @@ const nextConfig = {
       'ipfs.io',
       'cloudflare-ipfs.com',
       'nftstorage.link',
-      'via.placeholder.com',
+      'picsum.photos',
       'api.dicebear.com',
       'drive.google.com',
       'lh3.googleusercontent.com',
-      'docs.google.com'
+      'docs.google.com',
+      'dummyimage.com'
     ],
     remotePatterns: [
       {

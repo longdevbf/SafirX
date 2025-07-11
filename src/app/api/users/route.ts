@@ -106,7 +106,7 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
   // Fallback 2: Use placeholder image
   const placeholderUrl = isProfile 
     ? `https://api.dicebear.com/7.x/identicon/svg?seed=${fileName}&size=400&backgroundColor=random`
-    : `https://via.placeholder.com/1200x300/6366f1/ffffff?text=Banner+Image`
+    : `https://dummyimage.com/1200x300/6366f1/ffffff.png&text=Banner+Image`
   
   console.log('🔄 Using placeholder image as final fallback:', placeholderUrl)
   return placeholderUrl

@@ -127,6 +127,9 @@ hoặc
 - [x] Thêm placeholder fallback
 - [x] Fix database schema (VARCHAR → TEXT)
 - [x] Tối ưu hóa base64 fallback (< 100KB, < 50K chars)
+- [x] Fix via.placeholder.com accessibility issues
+- [x] Update Next.js image domains
+- [x] Clean up existing via.placeholder.com URLs
 - [ ] Setup shared drive (cần manual)
 - [ ] Test upload với file sizes khác nhau
 - [ ] Verify public access permissions
@@ -160,14 +163,17 @@ hoặc
 ### **Các lệnh hữu ích:**
 
 ```bash
-# Chạy migration database
+# Chạy migration database (fix field sizes)
 npx tsx src/scripts/fix-image-fields.ts
+
+# Fix placeholder URLs 
+npx tsx src/scripts/fix-placeholder-urls.ts
 
 # Kiểm tra logs upload
 # Tìm messages: ✅, ❌, 🔄 trong console
 
-# Reset user images về placeholder
-# (có thể thêm vào migration script nếu cần)
+# Restart server sau khi fix
+npm run dev
 ```
 
 ## 📞 Liên hệ support

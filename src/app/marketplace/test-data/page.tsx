@@ -39,7 +39,7 @@ export default function TestDataPage() {
         name: "Test NFT #1",
         description: "This is a test NFT for marketplace testing",
         category: "Art",
-        image: "https://via.placeholder.com/400x400.png?text=Test+NFT",
+        image: "https://picsum.photos/400/400?random=1",
         attributes: JSON.stringify([
           { trait_type: "Color", value: "Blue" },
           { trait_type: "Size", value: "Large" }
@@ -88,7 +88,7 @@ export default function TestDataPage() {
         name: "Test Bundle #1",
         description: "This is a test bundle collection for marketplace testing",
         category: "Collection",
-        image: "https://via.placeholder.com/400x400.png?text=Test+Bundle+Main",
+        image: "https://picsum.photos/400/400?random=2",
         attributes: JSON.stringify([
           { trait_type: "Type", value: "Bundle" },
           { trait_type: "Items", value: "5" }
@@ -97,17 +97,17 @@ export default function TestDataPage() {
         is_bundle: true,
         bundle_token_ids: "1,2,3,4,5",
         collection_image: "/placeholder.svg",
-        cover_image_url: "https://via.placeholder.com/400x400.png?text=Test+Bundle+Cover",
+        cover_image_url: "https://picsum.photos/400/400?random=3",
         tx_hash: "0xtest1234567890123456789012345678901234567890123456789012345678901234",
         // Bundle specific fields
         bundle_price: "50.0",
-        individual_images: JSON.stringify([
-          "https://via.placeholder.com/300x300.png?text=Item+1",
-          "https://via.placeholder.com/300x300.png?text=Item+2", 
-          "https://via.placeholder.com/300x300.png?text=Item+3",
-          "https://via.placeholder.com/300x300.png?text=Item+4",
-          "https://via.placeholder.com/300x300.png?text=Item+5"
-        ]),
+                  individual_images: JSON.stringify([
+            "https://picsum.photos/300/300?random=4",
+            "https://picsum.photos/300/300?random=5",
+            "https://picsum.photos/300/300?random=6",
+            "https://picsum.photos/300/300?random=7",
+            "https://picsum.photos/300/300?random=8"
+          ]),
         individual_metadata: JSON.stringify([
           { name: "Item #1", description: "First item" },
           { name: "Item #2", description: "Second item" },

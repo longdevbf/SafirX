@@ -72,7 +72,7 @@ export interface AuctionStats {
 
 // ✅ Contract Configuration - Updated
 export const SEALED_BID_AUCTION_CONFIG = {
-  address: '0x59cd11997fA0Ab7a571d030c5745862aEF31Fa21', // Update this address
+  address: '0x83E40b787ee2bc69CA9D8ddf4d856b183646Bcc6', // Update this address
   abi: [
     // ✅ Constructor
     {

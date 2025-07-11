@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -125,6 +125,17 @@ export default function AuctionCollectionSelector({
     }
     setSelectedTokens(newSelected)
   }
+
+  // ✅ Helper function to get the first selected NFT (by token ID order)
+  const getFirstSelectedNFT = useCallback(() => {
+    if (selectedTokens.size === 0) return null
+    
+    // Convert selectedTokens to array and sort by tokenId to get consistent "first" NFT
+    const sortedSelectedTokens = Array.from(selectedTokens).sort((a, b) => parseInt(a) - parseInt(b))
+    const firstTokenId = sortedSelectedTokens[0]
+    
+    return selectedContractNfts.find(nft => nft.tokenId === firstTokenId)
+  }, [selectedTokens, selectedContractNfts])
 
   // ✅ Handle image file selection
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,6 +290,17 @@ export default function AuctionCollectionSelector({
       setDescription(`Sealed bid auction for a collection of ${selectedTokens.size} NFTs from ${collectionName}. Highest bidder wins the entire collection.`)
     }
   }, [collectionName, selectedTokens.size])
+
+  // ✅ Auto-update collection image when selected tokens change and useFirstNFTImage is enabled
+  useEffect(() => {
+    if (useFirstNFTImage && selectedTokens.size > 0) {
+      const firstSelectedNFT = getFirstSelectedNFT()
+      if (firstSelectedNFT?.image) {
+        setCollectionImage(firstSelectedNFT.image)
+        setImagePreview(firstSelectedNFT.image)
+      }
+    }
+  }, [selectedTokens, useFirstNFTImage, getFirstSelectedNFT])
 
   if (contractOptions.length === 0) {
     return (
@@ -493,15 +515,23 @@ export default function AuctionCollectionSelector({
                     checked={useFirstNFTImage}
                     onCheckedChange={(checked) => {
                       setUseFirstNFTImage(!!checked)
-                      if (checked && selectedContractNfts[0]?.image) {
-                        setCollectionImage(selectedContractNfts[0].image)
-                        setImagePreview(selectedContractNfts[0].image)
-                        setCollectionImageFile(null)
+                      if (checked) {
+                        const firstSelectedNFT = getFirstSelectedNFT()
+                        if (firstSelectedNFT?.image) {
+                          setCollectionImage(firstSelectedNFT.image)
+                          setImagePreview(firstSelectedNFT.image)
+                          setCollectionImageFile(null)
+                        }
                       }
                     }}
                   />
                   <Label htmlFor="use-first-nft" className="text-sm">
-                    Use first NFT image as collection image
+                    Use first selected NFT image as collection image
+                    {selectedTokens.size > 0 && (
+                      <span className="text-muted-foreground ml-1">
+                        (Token #{Array.from(selectedTokens).sort((a, b) => parseInt(a) - parseInt(b))[0]})
+                      </span>
+                    )}
                   </Label>
                 </div>
 

@@ -6,10 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -18,144 +17,167 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { 
-  Lock, 
-  Eye, 
-  Users, 
-  Star, 
-  Clock, 
-  Info, 
-  AlertTriangle, 
-  CheckCircle, 
-  Timer,
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Clock,
   Gavel,
-
-  Loader2,
-  ExternalLink,
-  
-  RefreshCw,
-
- 
+  Users,
+  Eye,
+  Lock,
+  AlertTriangle,
   Crown,
-
-  Wallet,
+  Star,
+  CheckCircle,
+  Loader2,
   X,
+  RefreshCw,
+  Info,
+  TrendingUp,
+  Calendar,
+  DollarSign,
+  Activity,
+  Target,
+  Timer,
+  Package,
+  Zap,
   AlertCircle,
-  Shield,
-  Zap
+  ExternalLink,
+  Copy,
 } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
 import { formatEther, parseEther } from "viem"
 import { useWallet } from "@/context/walletContext"
+import { useAuctionDatabase, DatabaseAuction } from "@/context/auctionDatabaseContext"
+import { toast } from "@/hooks/use-toast"
+import { BidHistoryDialog } from "@/components/BidHistoryDialog"
+import CountdownTimer from "@/components/CountdownTimer"
 import { 
   useSealedBidAuction, 
   ProcessedAuction
 } from "@/hooks/use-auction"
-import { useAuctionDatabase, DatabaseAuction } from "@/context/auctionDatabaseContext"
-import { toast } from "@/hooks/use-toast"
-//import { AuctionState } from "@/abis/AuctionSealedBid"
-import { BidHistoryDialog } from "@/components/BidHistoryDialog"
+
+// ✅ Adapter function to convert DatabaseAuction to ProcessedAuction
+const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): ProcessedAuction => {
+  return {
+    auctionId: BigInt(dbAuction.auction_id),
+    seller: dbAuction.seller_address,
+    nftContract: dbAuction.nft_contract,
+    tokenId: BigInt(dbAuction.token_id || 0),
+    tokenIds: dbAuction.token_ids || [],
+    tokenIdsList: dbAuction.tokenIds.map(id => BigInt(id)),
+    startingPrice: parseEther(dbAuction.starting_price),
+    reservePrice: parseEther(dbAuction.reserve_price),
+    minBidIncrement: parseEther(dbAuction.min_bid_increment),
+    startTime: BigInt(Math.floor(new Date(dbAuction.start_time).getTime() / 1000)),
+    endTime: BigInt(Math.floor(new Date(dbAuction.end_time).getTime() / 1000)),
+    bidExtensionTime: BigInt(600), // 10 minutes
+    isActive: dbAuction.isActive,
+    isFinalized: dbAuction.isFinalized,
+    totalBids: BigInt(dbAuction.total_bids),
+    uniqueBidders: BigInt(dbAuction.unique_bidders),
+    highestBidder: dbAuction.winner_address || '0x0000000000000000000000000000000000000000',
+    highestBid: dbAuction.final_price ? parseEther(dbAuction.final_price) : BigInt(0),
+    allowPublicReveal: dbAuction.allow_public_reveal,
+    title: dbAuction.title,
+    description: dbAuction.description,
+    timeRemaining: dbAuction.timeRemaining,
+    finalPrice: dbAuction.final_price,
+    nftCount: dbAuction.nft_count,
+    isCollection: dbAuction.isCollection,
+    userCanBid: dbAuction.isActive && !dbAuction.isEnded,
+    userBid: null, // Will be populated separately if needed
+    nftMetadata: dbAuction.nft_metadata || {
+      name: dbAuction.title,
+      description: dbAuction.description,
+      image: dbAuction.collection_image_url || '/placeholder.svg'
+    }
+  }
+}
 
 export default function AuctionsPage() {
+  const [activeTab, setActiveTab] = useState<"active" | "ended" | "finalized">("active")
   const [selectedAuction, setSelectedAuction] = useState<ProcessedAuction | null>(null)
   const [bidAmount, setBidAmount] = useState("")
   const [isUpdatingBid, setIsUpdatingBid] = useState(false)
-  const [activeTab, setActiveTab] = useState("active")
   const [showBidHistory, setShowBidHistory] = useState<string | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
+  
   // ✅ Use database context instead of blockchain context for fast loading
   const { groupedAuctions, loading, refetch } = useAuctionDatabase()
   const { address, isConnected } = useWallet()
   
   const {
     placeBid,
+    cancelAuction,
     finalizeAuction,
     revealMyBid,
     enablePublicBidHistory,
-    cancelAuction,
     hash,
+    error,
     isPending,
     isConfirming,
     isConfirmed,
-    error: transactionError
   } = useSealedBidAuction()
-  console.log(isUpdatingBid);
 
-  // ✅ Handle transaction success
+  // ✅ Convert database auctions to processed format
+  const processedGroupedAuctions = {
+    active: groupedAuctions.active.map(convertDatabaseToProcessedAuction),
+    ended: groupedAuctions.ended.map(convertDatabaseToProcessedAuction),
+    finalized: groupedAuctions.finalized.map(convertDatabaseToProcessedAuction)
+  }
+
+  // ✅ Handle successful transactions
   useEffect(() => {
     if (isConfirmed && hash) {
       toast({
-        title: "✅ Transaction Successful!",
-        description: (
-          <div className="space-y-2">
-            <p>Your transaction has been confirmed!</p>
-            <a 
-              href={`https://testnet.explorer.sapphire.oasis.dev/tx/${hash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline text-sm flex items-center gap-1"
-            >
-              <ExternalLink className="h-3 w-3" />
-              View on Explorer
-            </a>
-          </div>
-        ),
-        duration: 8000,
+        title: "✅ Transaction Successful",
+        description: "Your transaction has been confirmed on the blockchain.",
       })
       
-      // Reset form and refresh data
+      // Refresh auction data
+      refetch()
+      
+      // Reset states
       setSelectedAuction(null)
       setBidAmount("")
-      setIsUpdatingBid(false)
       setShowCancelDialog(null)
       setCancelReason("")
-      setExpandedCollection(null)
-      
-      // Refresh auctions after 2 seconds
-      setTimeout(() => {
-        refetch()
-      }, 2000)
     }
   }, [isConfirmed, hash, refetch])
 
-  // ✅ Handle transaction error
+  // ✅ Handle errors
   useEffect(() => {
-    if (transactionError) {
+    if (error) {
       toast({
         title: "❌ Transaction Failed",
-        description: transactionError.message || "Transaction failed. Please try again.",
-        variant: "destructive"
+        description: error.message || "An error occurred during the transaction.",
+        variant: "destructive",
       })
     }
-  }, [transactionError])
+  }, [error])
 
-  // ✅ Handle place/update bid
+  // ✅ Handle bid placement
   const handlePlaceBid = async () => {
-    if (!selectedAuction || !bidAmount || !isConnected) return
+    if (!selectedAuction || !bidAmount || !address) return
 
     try {
       const bidAmountWei = parseEther(bidAmount)
-      const startingPriceWei = selectedAuction.startingPrice
-      const currentBidWei = selectedAuction.userBid?.amount || BigInt(0)
-
-      // Validation
-      if (bidAmountWei < startingPriceWei) {
+      
+      // Validate bid amount
+      if (bidAmountWei < selectedAuction.startingPrice) {
         toast({
-          title: "Invalid Bid",
-          description: `Bid must be at least ${formatEther(startingPriceWei)} ROSE`,
-          variant: "destructive"
-        })
-        return
-      }
-
-      if (selectedAuction.userBid && bidAmountWei <= currentBidWei) {
-        toast({
-          title: "Invalid Bid",
-          description: `New bid must be higher than your current bid of ${formatEther(currentBidWei)} ROSE`,
-          variant: "destructive"
+          title: "❌ Invalid Bid",
+          description: "Bid amount must be at least the starting price.",
+          variant: "destructive",
         })
         return
       }
@@ -168,72 +190,57 @@ export default function AuctionsPage() {
       })
 
     } catch (error) {
-      console.error('Bid placement error:', error)
+      console.error("Error placing bid:", error)
+      toast({
+        title: "❌ Bid Failed",
+        description: "Failed to place bid. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
-  // ✅ Handle cancel auction
+  // ✅ Handle auction cancellation
   const handleCancelAuction = async (auctionId: string, reason: string) => {
     if (!reason.trim()) {
       toast({
-        title: "Reason Required",
-        description: "Please provide a reason for cancelling the auction.",
-        variant: "destructive"
+        title: "❌ Cancellation Failed",
+        description: "Please provide a reason for cancellation.",
+        variant: "destructive",
       })
       return
     }
 
     try {
       await cancelAuction(auctionId, reason)
-      
-      toast({
-        title: "🚫 Cancelling Auction",
-        description: "Processing auction cancellation and refunding all bidders...",
-      })
     } catch (error) {
-      console.error('Cancellation error:', error)
+      console.error("Error canceling auction:", error)
     }
   }
 
-  // ✅ Handle finalize auction
+  // ✅ Handle auction finalization
   const handleFinalizeAuction = async (auctionId: string) => {
     try {
       await finalizeAuction(auctionId)
-      
-      toast({
-        title: "🎯 Finalizing Auction",
-        description: "Processing auction finalization...",
-      })
     } catch (error) {
-      console.error('Finalization error:', error)
+      console.error("Error finalizing auction:", error)
     }
   }
 
-  // ✅ Handle reveal bid
+  // ✅ Handle bid reveal
   const handleRevealBid = async (auctionId: string) => {
     try {
       await revealMyBid(auctionId)
-      
-      toast({
-        title: "👁️ Revealing Your Bid",
-        description: "Making your bid public...",
-      })
     } catch (error) {
-      console.error('Reveal error:', error)
+      console.error("Error revealing bid:", error)
     }
   }
 
-  // ✅ Handle enable public bid history
+  // ✅ Handle public bid history
   const handleEnablePublicHistory = async (auctionId: string) => {
     try {
       await enablePublicBidHistory(auctionId)
-      
-      toast({
-        title: "📊 Enabling Public Bid History",
-        description: "Making all bid history public...",
-      })
     } catch (error) {
-      console.error('Enable public history error:', error)
+      console.error("Error enabling public bid history:", error)
     }
   }
 
@@ -244,34 +251,34 @@ export default function AuctionsPage() {
     const days = Math.floor(seconds / 86400)
     const hours = Math.floor((seconds % 86400) / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
     
     if (days > 0) return `${days}d ${hours}h ${minutes}m`
-    if (hours > 0) return `${hours}h ${minutes}m`
-    return `${minutes}m`
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`
+    if (minutes > 0) return `${minutes}m ${secs}s`
+    return `${secs}s`
   }
 
   // ✅ Format address
   const formatAddress = (address: string) => {
+    if (!address) return "Unknown"
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
-  const isUserSeller = (auction: DatabaseAuction) => {
-    return address && auction.seller_address.toLowerCase() === address.toLowerCase()
+  // ✅ Check if user is seller
+  const isUserSeller = (auction: ProcessedAuction) => {
+    return address && auction.seller.toLowerCase() === address.toLowerCase()
   }
 
   // ✅ Check if auction can be cancelled
-  const canCancelAuction = (auction: DatabaseAuction) => {
-    // Seller can cancel if auction is active
-    // Contract logic: if totalBids > 0, only owner can cancel (not seller)
-    return isUserSeller(auction) && auction.isActive && auction.total_bids === 0
+  const canCancelAuction = (auction: ProcessedAuction) => {
+    return isUserSeller(auction) && auction.isActive && auction.totalBids === BigInt(0)
   }
 
-
-
   // ✅ Render cancel auction dialog
-  const renderCancelDialog = (auction: DatabaseAuction) => {
+  const renderCancelDialog = (auction: ProcessedAuction) => {
     return (
-              <Dialog open={showCancelDialog === auction.auction_id.toString()} onOpenChange={(open) => {
+      <Dialog open={showCancelDialog === auction.auctionId.toString()} onOpenChange={(open) => {
         if (!open) {
           setShowCancelDialog(null)
           setCancelReason("")
@@ -282,7 +289,7 @@ export default function AuctionsPage() {
             variant="destructive"
             className="w-full" 
             onClick={() => {
-              setShowCancelDialog(auction.auction_id.toString())
+              setShowCancelDialog(auction.auctionId.toString())
               setCancelReason("")
             }}
             disabled={!canCancelAuction(auction) || !isConnected}
@@ -292,95 +299,78 @@ export default function AuctionsPage() {
           </Button>
         </DialogTrigger>
         
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-red-600">Cancel Auction</DialogTitle>
+            <DialogTitle className="text-lg">Cancel Auction #{auction.auctionId.toString()}</DialogTitle>
             <DialogDescription>
-              This action will cancel the auction and refund all bidders. This cannot be undone.
+              Are you sure you want to cancel this auction? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
-            {/* NFT Info */}
-            <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-              <div className="w-16 h-16 relative">
-                <Image
-                  src={auction.nftMetadata?.image || '/placeholder.svg'}
-                  alt={auction.title}
-                  fill
-                  className="object-cover rounded"
-                />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold">{auction.title}</h3>
-                <p className="text-sm text-muted-foreground">
-                  Starting: {formatEther(auction.startingPrice)} ROSE
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Bidders: {auction.uniqueBidders.toString()}
-                </p>
-              </div>
-            </div>
-
-            {/* Warning */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+            {/* Auction info */}
+            <div className="bg-muted rounded-lg p-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 relative">
+                  <Image
+                    src={auction.nftMetadata?.image || '/placeholder.svg'}
+                    alt={auction.title}
+                    fill
+                    className="object-cover rounded"
+                  />
+                </div>
                 <div>
-                  <h4 className="font-medium text-red-900 mb-1">Warning</h4>
-                  <ul className="text-sm text-red-700 space-y-1">
-                    {auction.totalBids > 0 ? (
-                      <>
-                        <li>• This auction has {auction.totalBids.toString()} active bid(s)</li>
-                        <li>• Only the platform owner can cancel auctions with bids</li>
-                        <li>• All bidders will be automatically refunded</li>
-                      </>
-                    ) : (
-                      <>
-                        <li>• This will permanently cancel your auction</li>
-                        <li>• No bidders will be affected since there are no bids yet</li>
-                        <li>• You can create a new auction with the same NFT later</li>
-                      </>
-                    )}
-                  </ul>
+                  <div className="font-medium">{auction.title}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {auction.isCollection ? `${auction.nftCount} NFTs` : 'Single NFT'}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Can't cancel warning */}
-            {auction.totalBids > 0 && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  You cannot cancel this auction because it has active bids. Only the platform administrator can cancel auctions with bids.
-                </AlertDescription>
-              </Alert>
-            )}
+            {/* Warning */}
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {canCancelAuction(auction) ? (
+                  "This auction has no bids and can be safely cancelled."
+                ) : (
+                  "This auction cannot be cancelled because it has active bids."
+                )}
+              </AlertDescription>
+            </Alert>
 
-            {/* Reason input - only show if can cancel */}
-            {canCancelAuction(auction) && (
-              <div>
-                <Label htmlFor="cancel-reason">Reason for Cancellation *</Label>
-                <Textarea
-                  id="cancel-reason"
-                  placeholder="Please explain why you're cancelling this auction..."
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  disabled={isPending || isConfirming}
-                  className="min-h-[80px]"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  This reason will be recorded on the blockchain and visible to all users.
-                </p>
-              </div>
-            )}
+            {/* Reason input */}
+            <div className="space-y-2">
+              <Label htmlFor="cancel-reason">Reason for cancellation</Label>
+              <Textarea
+                id="cancel-reason"
+                placeholder="Please provide a reason for cancelling this auction..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                disabled={isPending || isConfirming}
+                rows={3}
+              />
+            </div>
 
             {/* Action buttons */}
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCancelDialog(null)
+                  setCancelReason("")
+                }}
+                className="flex-1"
+                disabled={isPending || isConfirming}
+              >
+                Keep Auction
+              </Button>
+              
               {canCancelAuction(auction) ? (
                 <Button
                   variant="destructive"
-                  onClick={() => handleCancelAuction(auction.auction_id.toString(), cancelReason)}
+                  onClick={() => handleCancelAuction(auction.auctionId.toString(), cancelReason)}
                   disabled={
                     !cancelReason.trim() || 
                     isPending || 
@@ -391,7 +381,7 @@ export default function AuctionsPage() {
                   {isPending || isConfirming ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      {isPending ? "Confirm in Wallet..." : "Cancelling..."}
+                      Cancelling...
                     </>
                   ) : (
                     <>
@@ -403,23 +393,12 @@ export default function AuctionsPage() {
               ) : (
                 <Button
                   variant="destructive"
-                  disabled
+                  disabled={true}
                   className="flex-1"
                 >
-                  Cannot Cancel (Has Bids)
+                  Cannot Cancel
                 </Button>
               )}
-              
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowCancelDialog(null)
-                  setCancelReason("")
-                }}
-                className="flex-1"
-              >
-                Keep Auction
-              </Button>
             </div>
           </div>
         </DialogContent>
@@ -751,11 +730,10 @@ export default function AuctionsPage() {
           
           {/* Time remaining */}
           <div className="absolute bottom-3 left-3">
-            <Badge variant={type === 'active' ? "destructive" : "secondary"} 
-                   className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {formatTimeRemaining(auction.timeRemaining)}
-            </Badge>
+            <CountdownTimer 
+              endTime={new Date(Number(auction.endTime) * 1000).toISOString()}
+              variant={type === 'active' ? "destructive" : "secondary"}
+            />
           </div>
         </div>
         
@@ -803,7 +781,7 @@ export default function AuctionsPage() {
                     <Lock className="w-4 h-4 text-blue-600" />
                     <span className="font-medium text-blue-900">Your Bid</span>
                   </div>
-                                    <div className="font-bold text-blue-900">
+                  <div className="font-bold text-blue-900">
                     {formatEther(auction.userBid!.amount)} ROSE
                   </div>
                 </div>
@@ -845,7 +823,7 @@ export default function AuctionsPage() {
                       <div className="text-center text-sm text-muted-foreground">
                         {canCancelAuction(auction) 
                           ? "You can cancel this auction" 
-                          : auction.totalBids > 0 
+                          : auction.totalBids > BigInt(0) 
                             ? "Cannot cancel - auction has bids"
                             : "Auction is active"
                         }
@@ -939,107 +917,90 @@ export default function AuctionsPage() {
                 Private bidding where all bids remain hidden until finalization
               </p>
             </div>
-            <Button onClick={() => refetch()} variant="outline" size="sm">
-              <RefreshCw className="w-4 h-4 mr-2" />
+            <Button
+              variant="outline"
+              onClick={() => refetch()}
+              disabled={loading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
         </div>
 
-        {/* How It Works */}
-        <Card className="mb-8 bg-blue-50 border-blue-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="w-5 h-5 text-blue-600" />
-              How Sealed Bid Auctions Work
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
-                  1
-                </div>
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-semibold text-blue-900">Sealed Bidding</h4>
-                  <p className="text-sm text-blue-700">
-                    Submit hidden bids that remain completely private until auction ends.
-                  </p>
+                  <p className="text-sm text-muted-foreground">Active Auctions</p>
+                  <p className="text-2xl font-bold text-green-600">{processedGroupedAuctions.active.length}</p>
+                </div>
+                <div className="p-2 bg-green-100 rounded-full">
+                  <Activity className="w-5 h-5 text-green-600" />
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
-                  2
-                </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-semibold text-blue-900">Auto-Finalization</h4>
-                  <p className="text-sm text-blue-700">
-                    When auction ends, anyone can trigger automatic NFT transfer and refunds.
-                  </p>
+                  <p className="text-sm text-muted-foreground">Ended Auctions</p>
+                  <p className="text-2xl font-bold text-orange-600">{processedGroupedAuctions.ended.length}</p>
+                </div>
+                <div className="p-2 bg-orange-100 rounded-full">
+                  <Clock className="w-5 h-5 text-orange-600" />
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
-                  3
-                </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-semibold text-blue-900">Winner Takes All</h4>
-                  <p className="text-sm text-blue-700">
-                    Highest bidder wins and pays their exact bid. All others get automatic refunds.
-                  </p>
+                  <p className="text-sm text-muted-foreground">Finalized</p>
+                  <p className="text-2xl font-bold text-blue-600">{processedGroupedAuctions.finalized.length}</p>
+                </div>
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <CheckCircle className="w-5 h-5 text-blue-600" />
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Connection Required */}
-        {!isConnected && (
-          <Alert className="mb-8">
-            <Wallet className="h-4 w-4" />
-            <AlertDescription>
-              Please connect your wallet to participate in sealed bid auctions.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
+        {/* Auction Tabs */}
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="active" className="flex items-center gap-2">
-              <Timer className="w-4 h-4" />
-              Active ({groupedAuctions.active.length})
+              <Activity className="w-4 h-4" />
+              Active ({processedGroupedAuctions.active.length})
             </TabsTrigger>
             <TabsTrigger value="ended" className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
-              Ended ({groupedAuctions.ended.length})
+              Ended ({processedGroupedAuctions.ended.length})
             </TabsTrigger>
             <TabsTrigger value="finalized" className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4" />
-              Finalized ({groupedAuctions.finalized.length})
+              Finalized ({processedGroupedAuctions.finalized.length})
             </TabsTrigger>
           </TabsList>
 
-          {/* Loading state */}
+          {/* Loading State */}
           {loading && (
-            <div className="space-y-6 mt-6">
-              <Alert className="bg-blue-50 border-blue-200">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <AlertDescription>
-                  <div className="font-semibold">Loading auctions...</div>
-                  <div className="text-sm text-muted-foreground">
-                    Fetching auction data from the blockchain. This may take a moment.
-                  </div>
-                </AlertDescription>
-              </Alert>
-              
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
+            <div className="mt-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[...Array(8)].map((_, i) => (
                   <Card key={i} className="overflow-hidden">
                     <Skeleton className="aspect-square w-full" />
-                    <CardContent className="p-4 space-y-2">
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
+                    <CardContent className="p-4">
+                      <Skeleton className="h-4 w-3/4 mb-2" />
+                      <Skeleton className="h-3 w-1/2 mb-4" />
                       <Skeleton className="h-8 w-full" />
                     </CardContent>
                   </Card>
@@ -1048,139 +1009,67 @@ export default function AuctionsPage() {
             </div>
           )}
 
+          {/* Error State */}
+          {error && (
+            <Alert className="mt-8">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Error loading auctions: {error}. Please try refreshing the page.
+              </AlertDescription>
+            </Alert>
+          )}
 
-          {/* Active Bidding Phase */}
-          <TabsContent value="active" className="space-y-6">
-            {groupedAuctions.active.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {groupedAuctions.active.map((auction) => 
-                  renderAuctionCard(auction, 'active')
-                )}
-              </div>
-            ) : (
+          {/* Active Auctions */}
+          <TabsContent value="active" className="mt-8">
+            {processedGroupedAuctions.active.length === 0 ? (
               <div className="text-center py-12">
-                <Timer className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <Activity className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Active Auctions</h3>
                 <p className="text-muted-foreground">
-                  There are currently no active sealed bid auctions.
+                  There are currently no active auctions. Check back later!
                 </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {processedGroupedAuctions.active.map((auction) => renderAuctionCard(auction, 'active'))}
               </div>
             )}
           </TabsContent>
 
-          {/* Ended Auctions (Awaiting Finalization) */}
-          <TabsContent value="ended" className="space-y-6">
-            {groupedAuctions.ended.length > 0 && (
-              <Alert className="mb-6">
-                <Gavel className="h-4 w-4" />
-                <AlertDescription>
-                  These auctions have ended and need finalization. Anyone can trigger the finalization process to transfer the NFT and process refunds.
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            {groupedAuctions.ended.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {groupedAuctions.ended.map((auction) => 
-                  renderAuctionCard(auction, 'ended')
-                )}
+          {/* Ended Auctions */}
+          <TabsContent value="ended" className="mt-8">
+            {processedGroupedAuctions.ended.length === 0 ? (
+              <div className="text-center py-12">
+                <Clock className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Ended Auctions</h3>
+                <p className="text-muted-foreground">
+                  No auctions have ended recently. Active auctions will appear here when they finish.
+                </p>
               </div>
             ) : (
-              <div className="text-center py-12">
-                <Clock className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Auctions Awaiting Finalization</h3>
-                <p className="text-muted-foreground">
-                  All ended auctions have been finalized.
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {processedGroupedAuctions.ended.map((auction) => renderAuctionCard(auction, 'ended'))}
               </div>
             )}
           </TabsContent>
 
           {/* Finalized Auctions */}
-          <TabsContent value="finalized" className="space-y-6">
-            {groupedAuctions.finalized.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {groupedAuctions.finalized.map((auction) => 
-                  renderAuctionCard(auction, 'finalized')
-                )}
-              </div>
-            ) : (
+          <TabsContent value="finalized" className="mt-8">
+            {processedGroupedAuctions.finalized.length === 0 ? (
               <div className="text-center py-12">
-                <CheckCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <CheckCircle className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Finalized Auctions</h3>
                 <p className="text-muted-foreground">
-                  Completed auctions will appear here.
+                  No auctions have been finalized yet. Ended auctions will appear here after finalization.
                 </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {processedGroupedAuctions.finalized.map((auction) => renderAuctionCard(auction, 'finalized'))}
               </div>
             )}
           </TabsContent>
         </Tabs>
-
-
-
-        {/* Create Sealed Auction CTA */}
-        <div className="mt-12">
-          <Card className="relative overflow-hidden border-0 shadow-2xl">
-            {/* Background with gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-900">
-              <div className="absolute inset-0 bg-[url('/assets/bottom_b.jpg')] bg-cover bg-center opacity-30"></div>
-              <div className="absolute inset-0 bg-gradient-to-r to-blue-600/20"></div>
-              {/* Animated grid overlay */}
-              <div className="absolute inset-0 opacity-20">
-                <div className="h-full w-full bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent animate-pulse"></div>
-              </div>
-            </div>
-            
-            <CardContent className="relative z-10 p-8 text-center">
-              <div className="relative">
-                {/* Glowing effect behind icon */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-purple-500/30 rounded-full blur-xl"></div>
-                <Lock className="w-12 h-12 mx-auto mb-4 text-purple-300 relative z-10" />
-              </div>
-              
-              <h3 className="text-3xl font-bold mb-3 text-white bg-gradient-to-r from-purple-300 to-blue-300 bg-clip-text text-transparent">
-                Create Your Own Sealed Auction
-              </h3>
-              
-              <p className="text-gray-200 mb-8 text-lg max-w-2xl mx-auto leading-relaxed">
-                Launch a private auction where bidders compete without seeing each other bids. 
-                Experience the thrill of sealed bidding with complete transparency and fairness.
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                <Button size="lg" asChild className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-                  <Link href="/profile" className="flex items-center gap-2">
-                    <Lock className="w-5 h-5" />
-                    Create Sealed Auction
-                  </Link>
-                </Button>
-                
-                <Button variant="outline" size="lg" asChild className="bg-white/10 border-white/20 text-white hover:bg-white/20 backdrop-blur-sm">
-                  <Link href="/marketplace" className="flex items-center gap-2">
-                    <Eye className="w-5 h-5" />
-                    Browse Marketplace
-                  </Link>
-                </Button>
-              </div>
-              
-              {/* Feature highlights */}
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                <div className="flex items-center justify-center gap-2 text-gray-300">
-                  <Lock className="w-4 h-4 text-purple-400" />
-                  <span>Private Bidding</span>
-                </div>
-                <div className="flex items-center justify-center gap-2 text-gray-300">
-                  <Shield className="w-4 h-4 text-blue-400" />
-                  <span>Secure & Fair</span>
-                </div>
-                <div className="flex items-center justify-center gap-2 text-gray-300">
-                  <Zap className="w-4 h-4 text-cyan-400" />
-                  <span>Auto-Finalization</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   )

@@ -65,6 +65,7 @@ import { config } from "@/components/config/wagmiConfig"
 import { Checkbox } from "@/components/ui/checkbox"
 import { syncListingToDatabase, syncAuctionToDatabase, prepareListingData, prepareAuctionData } from "@/utils/syncToDatabase"
 import { getListingIdFromTransaction, getLatestListingIdForUser } from "@/utils/getListingIdFromTransaction"
+import { keccak256, toHex } from "viem"
 
 interface UserProfile {
   name: string
@@ -211,9 +212,51 @@ export default function ProfilePage() {
         }
       },
       getAuctionIdFromTransaction: async (txHash: string) => {
-        // Simplified - in real app you'd parse transaction logs
-        // For now, return the latest auction ID + 1
-        return { auctionId: Date.now().toString(), type: 'single' }
+        try {
+          console.log('🔍 Getting auction ID from transaction:', txHash)
+          
+          // Get transaction receipt using fetch
+          const response = await fetch('https://testnet.sapphire.oasis.io/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'eth_getTransactionReceipt',
+              params: [txHash],
+              id: 1,
+            }),
+          })
+
+          const data = await response.json()
+          const receipt = data.result
+
+          if (!receipt || !receipt.logs) {
+            console.error('❌ No receipt or logs found')
+            return { auctionId: null, type: 'single' }
+          }
+
+          // Parse AuctionCreated event from logs
+          // Event signature: AuctionCreated(uint256 indexed auctionId, address indexed seller, ...)
+          const auctionCreatedTopic = keccak256(toHex('AuctionCreated(uint256,address,address,uint8,uint256,uint256[],uint256,uint256,string,bool)'))
+          
+          for (const log of receipt.logs) {
+            if (log.topics && log.topics[0] === auctionCreatedTopic) {
+              // First topic is event signature, second is auctionId
+              const auctionId = parseInt(log.topics[1], 16)
+              console.log('✅ Found auction ID from blockchain:', auctionId)
+              return { auctionId: auctionId.toString(), type: 'single' }
+            }
+          }
+
+          console.error('❌ AuctionCreated event not found in logs')
+          return { auctionId: null, type: 'single' }
+
+        } catch (error) {
+          console.error('❌ Error parsing transaction:', error)
+          return { auctionId: null, type: 'single' }
+        }
       }
     }
   }, [])
@@ -1029,13 +1072,16 @@ export default function ProfilePage() {
 
   // ✅ NEW: Handle auction creation success and sync to database
   React.useEffect(() => {
-    if (isAuctionConfirmed && auctionHash) {
+    if (isAuctionConfirmed && auctionHash && lastTransactionHash !== auctionHash) {
       console.log('🎉 Auction transaction confirmed:', auctionHash)
+      
+      // Update last transaction hash to prevent re-execution
+      setLastTransactionHash(auctionHash)
       
       // Sync auction to database
       const syncAuctionData = async () => {
         try {
-          // Get auction ID from transaction
+          // Get auction ID from transaction logs
           const { auctionId } = await getAuctionIdFromTransaction(auctionHash)
           
           if (!auctionId) {
@@ -1043,7 +1089,7 @@ export default function ProfilePage() {
             return
           }
 
-          console.log('🔍 Got auction ID:', auctionId)
+          console.log('🔍 Got auction ID from blockchain:', auctionId)
 
           // Prepare auction data based on type
           let auctionDataForDb: any
@@ -1158,7 +1204,7 @@ export default function ProfilePage() {
 
       syncAuctionData()
       
-      showSuccessMessage("🎉 Auction Created Successfully!", auctionHash)
+      // Reset form state
       setShowAuctionDialog(false)
       setShowAuctionCollectionSelector(false)
       setSelectedAuctionNFT(null)
@@ -1177,7 +1223,7 @@ export default function ProfilePage() {
         refetch()
       }, 3000)
     }
-  }, [isAuctionConfirmed, auctionHash, selectedAuctionNFT, auctionData, address, getAuctionIdFromTransaction, prepareAuctionData, syncAuctionToDatabase, refetch])
+  }, [isAuctionConfirmed, auctionHash, lastTransactionHash])
 
   // ✅ NEW: Handle single NFT auction
   const handleCreateSingleAuction = async (nft: ProcessedNFT) => {

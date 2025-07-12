@@ -91,7 +91,7 @@ async function uploadImageWithFallback(file: File, fileName: string, isProfile: 
       console.error('❌ Google Drive upload failed:', error)
       
       // If it's a Service Account quota issue, suggest solutions
-      if (error.message.includes('Service Accounts do not have storage quota')) {
+      if ((error as Error).message.includes('Service Accounts do not have storage quota')) {
         console.log('💡 Service Account quota issue detected. Consider using shared drives or OAuth delegation.')
       }
     }
@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
         console.error('❌ Failed to process collection image:', error)
         return NextResponse.json({ 
           error: 'Failed to process collection image',
-          details: error.message 
+          details: (error as Error).message 
         }, { status: 500 })
       }
     }

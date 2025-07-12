@@ -56,7 +56,111 @@ export async function GET(request: NextRequest) {
 // POST - Sync bid history from blockchain
 export async function POST(request: NextRequest) {
   try {
-    const { action, auctionId, bidHistory } = await request.json()
+    const body = await request.json()
+    
+    // Check if this is a new bid update
+    if (body.auctionId && body.bidderAddress && body.bidAmount) {
+      // Handle new bid update
+      const { auctionId, bidderAddress, bidAmount } = body
+      
+      console.log(`🔍 Processing bid update for auction ${auctionId}:`, {
+        bidderAddress,
+        bidAmount,
+        timestamp: new Date().toISOString()
+      })
+      
+      const client = await pool.connect()
+      
+      try {
+        await client.query('BEGIN')
+        
+        // Get current auction data
+        const auction = await client.query(
+          'SELECT total_bids, unique_bidders FROM auctions WHERE auction_id = $1',
+          [auctionId]
+        )
+
+        if (auction.rows.length === 0) {
+          await client.query('ROLLBACK')
+          console.log(`❌ Auction ${auctionId} not found in database`)
+          return NextResponse.json(
+            { success: false, error: `Auction ${auctionId} not found in database` },
+            { status: 404 }
+          )
+        }
+
+        const currentAuction = auction.rows[0]
+        const currentTotalBids = parseInt(currentAuction.total_bids || '0')
+        const currentUniqueBidders = parseInt(currentAuction.unique_bidders || '0')
+        
+        console.log(`📊 Current auction stats: total_bids=${currentTotalBids}, unique_bidders=${currentUniqueBidders}`)
+
+        // Check if this bidder has already bid on this auction
+        const existingBid = await client.query(
+          'SELECT id FROM auction_bid_history WHERE auction_id = $1 AND bidder_address = $2',
+          [auctionId, bidderAddress]
+        )
+
+        const isNewBidder = existingBid.rows.length === 0
+        // ✅ FIXED: Chỉ tăng total_bids và unique_bidders khi có bidder mới
+        const newTotalBids = isNewBidder ? currentTotalBids + 1 : currentTotalBids
+        const newUniqueBidders = isNewBidder ? currentUniqueBidders + 1 : currentUniqueBidders
+        
+        console.log(`🔄 Bidder status: isNewBidder=${isNewBidder}`)
+        console.log(`📈 New stats: total_bids=${newTotalBids}, unique_bidders=${newUniqueBidders}`)
+
+        // Update auction with new bid counts
+        await client.query(
+          `UPDATE auctions 
+           SET total_bids = $1, unique_bidders = $2, updated_at = NOW()
+           WHERE auction_id = $3`,
+          [newTotalBids.toString(), newUniqueBidders.toString(), auctionId]
+        )
+
+        // Insert bid record into auction_bid_history
+        await client.query(
+          `INSERT INTO auction_bid_history 
+           (auction_id, bidder_address, bid_amount, bid_number, bid_timestamp, visibility)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (auction_id, bidder_address) 
+           DO UPDATE SET 
+             bid_amount = EXCLUDED.bid_amount,
+             bid_timestamp = EXCLUDED.bid_timestamp,
+             synced_at = NOW()`,
+          [
+            auctionId, 
+            bidderAddress, 
+            bidAmount, 
+            isNewBidder ? newTotalBids : (existingBid.rows[0]?.bid_number || 1), // Giữ nguyên bid_number nếu update
+            new Date().toISOString(),
+            'HIDDEN' // Sealed bids are hidden by default
+          ]
+        )
+        
+        await client.query('COMMIT')
+        
+        console.log(`✅ Updated bid counts for auction ${auctionId}: total_bids=${newTotalBids}, unique_bidders=${newUniqueBidders}`)
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            auctionId,
+            totalBids: newTotalBids,
+            uniqueBidders: newUniqueBidders,
+            isNewBidder
+          }
+        })
+        
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    }
+    
+    // Handle sync bid history (existing logic)
+    const { action, auctionId, bidHistory } = body
     
     if (action !== 'sync') {
       return NextResponse.json({ 
@@ -132,7 +236,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('❌ Error syncing bid history:', error)
+    console.error('❌ Error in POST /api/auctions/bids:', error)
     return NextResponse.json({ 
       success: false, 
       error: 'Internal server error' 

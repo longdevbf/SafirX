@@ -13,7 +13,7 @@ interface NFTMetadata {
 }
 /**
  * Pinata IPFS Upload Service
- * Using existing JWT and gateway from .env
+ * Using existing NEXT_PUBLIC_JWT and gateway from .env
  */
 
 export interface PinataUploadResult {
@@ -31,9 +31,9 @@ export async function uploadToPinata(
   try {
     console.log(`📤 Uploading to Pinata IPFS: ${fileName} (${(file.size / 1024).toFixed(1)}KB)`)
     
-    // Check if Pinata JWT is configured
-    if (!process.env.JWT) {
-      throw new Error('Pinata JWT not configured')
+    // Check if Pinata NEXT_PUBLIC_JWT is configured
+    if (!process.env.NEXT_PUBLIC_JWT) {
+      throw new Error('Pinata NEXT_PUBLIC_JWT not configured')
     }
 
     // Create form data for Pinata API
@@ -67,7 +67,7 @@ export async function uploadToPinata(
     const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.JWT}`,
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_JWT}`,
       },
       body: formData
     })
@@ -105,16 +105,16 @@ export async function uploadToPinata(
 }
 
 export function isPinataConfigured(): boolean {
-  return !!process.env.JWT
+  return !!process.env.NEXT_PUBLIC_JWT
 }
 
 export async function testPinataConnection(): Promise<boolean> {
   try {
-    if (!process.env.JWT) return false
+    if (!process.env.NEXT_PUBLIC_JWT) return false
     
     const response = await fetch('https://api.pinata.cloud/data/testAuthentication', {
       headers: {
-        'Authorization': `Bearer ${process.env.JWT}`
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_JWT}`
       }
     })
     

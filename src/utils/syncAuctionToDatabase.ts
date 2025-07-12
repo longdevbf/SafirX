@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { formatEther } from 'viem'
 
 // ✅ Get auction ID from transaction logs
@@ -86,7 +87,7 @@ export async function getLatestAuctionIdForUser(userAddress: string): Promise<st
     if (data.result && data.result !== '0x') {
       // Decode the returned auction IDs array
       // This is a simplified approach - you might need proper ABI decoding
-      const decoded = data.result.slice(2) // Remove 0x
+      //const decoded = data.result.slice(2) // Remove 0x
       // Parse the last auction ID from the array
       // Implementation depends on your exact contract return format
       

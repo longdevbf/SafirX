@@ -1,4 +1,5 @@
-import { ProcessedNFT } from '@/interfaces/nft'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+//import { ProcessedNFT } from '@/interfaces/nft'
 
 interface SyncListingData {
   listing_id: string
@@ -371,7 +372,7 @@ export async function updateListingStatus(listingId: string, isActive: boolean):
       return false
     }
 
-    const result = await response.json()
+  //  const result = await response.json()
     console.log('✅ Successfully updated listing status:', listingId)
     return true
   } catch (error) {

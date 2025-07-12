@@ -16,7 +16,7 @@ export default function TestDataPage() {
       const response = await fetch('/api/listings')
       const data = await response.json()
       setResult(`Success: Found ${data.listings?.length || 0} listings`)
-      console.log('Listings data:', data)
+      ('Listings data:', data)
     } catch (error) {
       setResult(`Error: ${error}`)
       console.error('Error fetching listings:', error)
@@ -65,7 +65,7 @@ export default function TestDataPage() {
 
       const data = await response.json()
       setResult(`Sample NFT created successfully: ${data.listing?.listing_id}`)
-      console.log('Created listing:', data)
+      ('Created listing:', data)
     } catch (error) {
       setResult(`Error creating sample data: ${error}`)
       console.error('Error creating sample data:', error)
@@ -148,7 +148,7 @@ export default function TestDataPage() {
 
       const data = await response.json()
       setResult(`Sample bundle created successfully: ${data.listing?.listing_id}`)
-      console.log('Created bundle:', data)
+      ('Created bundle:', data)
     } catch (error) {
       setResult(`Error creating sample bundle: ${error}`)
       console.error('Error creating sample bundle:', error)

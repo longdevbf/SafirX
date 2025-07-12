@@ -507,15 +507,15 @@ export function useAuctionDetail(auctionId: string) {
     try {
       setLoadingBids(true)
       
-      // console.log(`🔍 Fetching public bid history for auction ${auctionId}...`)
-      // console.log(`📋 Auction details:`, {
-      //   auctionId,
-      //   state: auction?.state,
-      //   isFinalized: auction?.isFinalized,
-      //   allowPublicReveal: auction?.allowPublicReveal,
-      //   totalBids: auction?.totalBids?.toString(),
-      //   seller: auction?.seller
-      // })
+      console.log(`🔍 Fetching public bid history for auction ${auctionId}...`)
+      console.log(`📋 Auction details:`, {
+        auctionId,
+        state: auction?.state,
+        isFinalized: auction?.isFinalized,
+        allowPublicReveal: auction?.allowPublicReveal,
+        totalBids: auction?.totalBids?.toString(),
+        seller: auction?.seller
+      })
       
       const bids = await publicClient.readContract({
         address: SEALED_BID_AUCTION_CONFIG.address,
@@ -524,7 +524,7 @@ export function useAuctionDetail(auctionId: string) {
         args: [BigInt(auctionId)]
       }) as PublicBidInfo[]
       
-    //  console.log(`📊 Smart contract returned ${bids.length} public bids for auction ${auctionId}:`, bids)
+      console.log(`📊 Smart contract returned ${bids.length} public bids for auction ${auctionId}:`, bids)
       
       if (bids.length === 0 && auction?.totalBids && auction.totalBids > 0) {
         console.log(`⚠️ Expected ${auction.totalBids.toString()} bids but got 0 public bids. This means:`)
@@ -566,7 +566,7 @@ export function useAuctionDetail(auctionId: string) {
   }
 }
 
-// ✅ Hook for fetching ALL auctions (active + ended + finalized)
+// ✅ Hook for fetching ALL auctions (active + ended + finalized) with polling
 export function useAllAuctions() {
   const publicClient = usePublicClient()
   const { address } = useAccount()
@@ -574,6 +574,9 @@ export function useAllAuctions() {
   const [auctions, setAuctions] = useState<ProcessedAuction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // ✅ Add polling interval for real-time updates
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
 
   const fetchAllAuctions = useCallback(async () => {
     if (!publicClient) return
@@ -867,9 +870,32 @@ export function useAllAuctions() {
     }
   }, [publicClient, address])
 
+  // ✅ Start polling for real-time updates
   useEffect(() => {
     fetchAllAuctions()
+    
+    // Set up polling interval (every 30 seconds)
+    const interval = setInterval(() => {
+      fetchAllAuctions()
+    }, 30000) // 30 seconds
+    
+    setPollingInterval(interval)
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
   }, [fetchAllAuctions])
+
+  // ✅ Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+      }
+    }
+  }, [pollingInterval])
 
   return {
     auctions,

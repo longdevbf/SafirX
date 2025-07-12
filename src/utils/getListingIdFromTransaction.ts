@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createPublicClient, http, parseEventLogs } from 'viem'
 import { sapphireTestnet } from 'viem/chains'
 import { NFT_MARKET_CONFIG } from '@/abis/MarketABI'

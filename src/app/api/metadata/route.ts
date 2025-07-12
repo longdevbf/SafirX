@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No metadata provided' }, { status: 400 })
     }
 
-    if (!process.env.JWT || !process.env.GATEWAY) {
+    if (!process.env.NEXT_PUBLIC_JWT || !process.env.GATEWAY) {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
     }
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const pinataResponse = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.JWT}`,
+        Authorization: `Bearer ${process.env.NEXT_PUBLIC_JWT}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(metadata),

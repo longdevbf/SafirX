@@ -5,7 +5,7 @@ const dotenv_1 = require("dotenv");
 (0, dotenv_1.config)();
 const pg_1 = require("pg");
 async function createAuctionsTable() {
-    console.log('🚀 Creating auctions table...');
+    ('🚀 Creating auctions table...');
     if (!process.env.DATABASE_URL) {
         console.error('❌ DATABASE_URL environment variable is not set!');
         process.exit(1);
@@ -15,11 +15,11 @@ async function createAuctionsTable() {
         ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
     });
     try {
-        console.log('🔍 Testing connection...');
+        ('🔍 Testing connection...');
         const client = await pool.connect();
-        console.log('✅ Connected successfully!');
+        ('✅ Connected successfully!');
         // Drop existing indexes first
-        console.log('🧹 Dropping existing indexes if they exist...');
+        ('🧹 Dropping existing indexes if they exist...');
         const dropIndexes = [
             'DROP INDEX IF EXISTS idx_auctions_auction_id',
             'DROP INDEX IF EXISTS idx_auctions_seller',
@@ -40,11 +40,11 @@ async function createAuctionsTable() {
             }
         }
         // Drop and recreate tables for fresh start
-        console.log('🧹 Dropping existing tables if they exist...');
+        ('🧹 Dropping existing tables if they exist...');
         await client.query(`DROP TABLE IF EXISTS auction_bid_history CASCADE`);
         await client.query(`DROP TABLE IF EXISTS auctions CASCADE`);
         // Create auctions table
-        console.log('🔨 Creating auctions table...');
+        ('🔨 Creating auctions table...');
         await client.query(`
       CREATE TABLE auctions (
         id SERIAL PRIMARY KEY,
@@ -100,7 +100,7 @@ async function createAuctionsTable() {
       )
     `);
         // Create bid history table for finalized auctions
-        console.log('🔨 Creating auction_bid_history table...');
+        ('🔨 Creating auction_bid_history table...');
         await client.query(`
       CREATE TABLE auction_bid_history (
         id SERIAL PRIMARY KEY,
@@ -118,7 +118,7 @@ async function createAuctionsTable() {
       )
     `);
         // Create indexes for performance
-        console.log('📊 Creating indexes...');
+        ('📊 Creating indexes...');
         await client.query(`
       CREATE INDEX idx_auctions_auction_id ON auctions(auction_id);
       CREATE INDEX idx_auctions_seller ON auctions(seller_address);
@@ -127,14 +127,14 @@ async function createAuctionsTable() {
       CREATE INDEX idx_auctions_nft_contract ON auctions(nft_contract);
       CREATE INDEX idx_auctions_type ON auctions(auction_type);
     `);
-        console.log('📊 Creating bid history indexes...');
+        ('📊 Creating bid history indexes...');
         await client.query(`
       CREATE INDEX idx_bid_history_auction ON auction_bid_history(auction_id);
       CREATE INDEX idx_bid_history_bidder ON auction_bid_history(bidder_address);
       CREATE INDEX idx_bid_history_amount ON auction_bid_history(bid_amount DESC);
     `);
         // Create trigger to update updated_at
-        console.log('⚡ Creating update trigger...');
+        ('⚡ Creating update trigger...');
         await client.query(`
       CREATE OR REPLACE FUNCTION update_updated_at_column()
       RETURNS TRIGGER AS $$
@@ -149,13 +149,13 @@ async function createAuctionsTable() {
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column();
     `);
-        console.log('✅ Auctions table created successfully!');
-        console.log('');
-        console.log('📋 Table structure:');
-        console.log('   - auctions: Main auction data (single NFT + collection)');
-        console.log('   - auction_bid_history: Bid history for finalized auctions');
-        console.log('');
-        console.log('🎯 Ready for auction sync from blockchain!');
+        ('✅ Auctions table created successfully!');
+        ('');
+        ('📋 Table structure:');
+        ('   - auctions: Main auction data (single NFT + collection)');
+        ('   - auction_bid_history: Bid history for finalized auctions');
+        ('');
+        ('🎯 Ready for auction sync from blockchain!');
         client.release();
     }
     catch (error) {

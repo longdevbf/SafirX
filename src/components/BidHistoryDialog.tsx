@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { ProcessedAuction, useAuctionDetail } from "@/hooks/use-auction"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,12 +12,13 @@ import {
 
 import { formatEther } from "viem"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useEffect, useCallback } from "react"
+import { useEffect, useCallback, useState } from "react"
 import { usePublicClient } from "wagmi"
 import { SEALED_BID_AUCTION_CONFIG } from "@/abis/AuctionSealedBid"
 
 
 import { History, Crown, Eye, Loader2, Lock, AlertCircle } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
 
 interface PublicBid {
   bidder: string
@@ -59,34 +61,16 @@ export function BidHistoryDialog({
     error: bidError,
     refetchBids 
   } = useAuctionDetail(auction.auctionId.toString())
-  console.log(auctionDetail);
+  // ✅ Tạm thời comment tất cả debug logs
+  // console.log(auctionDetail);
 
   useEffect(() => {
     if (isOpen && (auction.isFinalized || (!auction.isActive && auction.state !== 2))) {
-      console.log(`🔄 Dialog opened for auction ${auction.auctionId}, refreshing bid history...`)
-      console.log(`📊 Current auction state:`, {
-        auctionId: auction.auctionId.toString(),
-        state: auction.state,
-        isFinalized: auction.isFinalized,
-        isActive: auction.isActive,
-        allowPublicReveal: auction.allowPublicReveal,
-        totalBids: auction.totalBids?.toString(),
-        uniqueBidders: auction.uniqueBidders?.toString(),
-        seller: auction.seller
-      })
+      // console.log(`🔄 Dialog opened for auction ${auction.auctionId}, refreshing bid history...`)
       refetchBids()
     }
-  }, [isOpen, auction.isFinalized, auction.isActive, auction.state, auction.auctionId, refetchBids])
-   // ✅ Log public bids whenever they change
-  useEffect(() => {
-    console.log(`📈 Public bids updated for auction ${auction.auctionId}:`, {
-      bidsCount: publicBids?.length || 0,
-      bids: publicBids,
-      loadingBids,
-      bidError
-    })
-  }, [publicBids, loadingBids, bidError, auction.auctionId])
-  
+  }, [isOpen, auction.isFinalized, auction.isActive, auction.state])
+
   // ✅ Helper function to debug auction state
   const debugAuctionState = useCallback(async () => {
     if (!publicClient) {
@@ -120,6 +104,36 @@ export function BidHistoryDialog({
       console.error('❌ Debug failed:', error)
     }
   }, [publicClient, auction.auctionId])
+  
+  // ✅ Thêm state để track enable public history
+  const [isEnablingPublicHistory, setIsEnablingPublicHistory] = useState(false)
+
+  // ✅ Handle enable public history
+  const handleEnablePublicHistory = async (auctionId: string) => {
+    if (!onEnablePublicHistory) return
+    
+    try {
+      setIsEnablingPublicHistory(true)
+      await onEnablePublicHistory(auctionId)
+      
+      // ✅ Refetch bids after enabling
+      await refetchBids()
+      
+      toast({ 
+        title: "✅ Public History Enabled", 
+        description: "All bids are now visible to everyone." 
+      })
+    } catch (error) {
+      console.error('Error enabling public history:', error)
+      toast({ 
+        title: "❌ Failed", 
+        description: "Failed to enable public history.", 
+        variant: "destructive" 
+      })
+    } finally {
+      setIsEnablingPublicHistory(false)
+    }
+  }
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

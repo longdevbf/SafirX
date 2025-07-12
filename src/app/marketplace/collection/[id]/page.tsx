@@ -61,6 +61,34 @@ export default function CollectionDetailPage() {
     soldItems
   } = useCollectionDetailFromDB(collectionId)
 
+  // Thêm state để quản lý dialog
+  const [dialogState, setDialogState] = useState<{
+    type: 'edit' | null;
+    nft: ProcessedNFT | null;
+  }>({
+    type: null,
+    nft: null
+  });
+
+  // Thay thế các hàm mở dialog hiện tại
+  const openEditDialog = (nft: ProcessedNFT) => {
+    setDialogState({
+      type: 'edit',
+      nft: nft
+    });
+    setNewPrice(nft.price?.toString() || "");
+    setIsEditDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogState({
+      type: null,
+      nft: null
+    });
+    setIsEditDialogOpen(false);
+    setNewPrice("");
+  };
+
   // Handle back navigation
   const handleBack = () => {
     router.back()
@@ -124,33 +152,32 @@ export default function CollectionDetailPage() {
   }, [isConnected, buyNFTUnified, toast])
 
   // Handle update price
-  const handleUpdatePrice = useCallback(async (nft: ProcessedNFT) => {
-    if (!newPrice || !nft) return
+  const handleUpdatePrice = useCallback(async () => {
+    if (!dialogState.nft || !newPrice) return;
 
     try {
-      setProcessingNFT(nft.id)
+      setProcessingNFT(dialogState.nft.id);
       
-      // Blockchain transaction first
-      if (nft.isBundle) {
-        await updateBundlePrice(nft.collectionId || nft.id, newPrice)
+      if (dialogState.nft.isBundle) {
+        await updateBundlePrice(dialogState.nft.collectionId || dialogState.nft.id, newPrice);
       } else {
-        await updateBundlePrice(nft.listingId || nft.id, newPrice)
+        await updateBundlePrice(dialogState.nft.listingId || dialogState.nft.id, newPrice);
       }
       
       toast({
         title: "Price Update Submitted",
         description: "Please confirm the transaction in your wallet...",
-      })
+      });
     } catch (error) {
-      console.error("Price update error:", error)
+      console.error("Price update error:", error);
       toast({
         title: "Price Update Failed",
         description: error instanceof Error ? error.message : "Failed to update price. Please try again.",
         variant: "destructive"
-      })
-      setProcessingNFT(null)
+      });
+      setProcessingNFT(null);
     }
-  }, [newPrice, updateBundlePrice, toast])
+  }, [dialogState.nft, newPrice, updateBundlePrice, toast]);
 
   // Handle cancel listing
   const handleCancelListing = useCallback(async (nft: ProcessedNFT) => {
@@ -352,7 +379,7 @@ export default function CollectionDetailPage() {
                   {isOwner(collectionData as any) ? (
                     <>
                       <Button
-                        onClick={() => setIsEditDialogOpen(true)}
+                        onClick={() => openEditDialog(collectionData as any)}
                         disabled={isProcessing(collectionData as any)}
                         className="flex-1"
                       >
@@ -460,7 +487,7 @@ export default function CollectionDetailPage() {
       </div>
 
       {/* Edit Price Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Collection Price</DialogTitle>
@@ -478,11 +505,11 @@ export default function CollectionDetailPage() {
               />
             </div>
             <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              <Button variant="outline" onClick={closeDialog}>
                 Cancel
               </Button>
               <Button
-                onClick={() => handleUpdatePrice(collectionData as any)}
+                onClick={handleUpdatePrice}
                 disabled={!newPrice || isPending}
               >
                 {isPending ? (

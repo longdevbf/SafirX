@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     })
     pinataData.append('pinataOptions', pinataOptions)
 
-    console.log('📤 Uploading to Pinata...')
+   // console.log('📤 Uploading to Pinata...')
     const pinataResponse = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
       method: 'POST',
       headers: {
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     const pinataResult = await pinataResponse.json()
-    console.log('✅ Pinata upload successful:', pinataResult)
+    //console.log('✅ Pinata upload successful:', pinataResult)
 
     // Construct IPFS URL
     const ipfsHash = pinataResult.IpfsHash

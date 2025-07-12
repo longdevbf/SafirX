@@ -186,7 +186,16 @@ export default function ProfilePage() {
         nftMetadata?: any
       ) => {
         const now = Date.now() / 1000
-        const endTime = now + (auctionData.duration || auctionData.durationHours * 3600)
+        // ✅ FIXED: auctionData.duration is in hours, convert to seconds
+        const endTime = now + ((auctionData.duration || auctionData.durationHours) * 3600)
+        
+        console.log('📊 Auction timing calculation:', {
+          now,
+          durationHours: auctionData.duration || auctionData.durationHours,
+          durationSeconds: (auctionData.duration || auctionData.durationHours) * 3600,
+          endTime,
+          endTimeDate: new Date(endTime * 1000).toISOString()
+        })
 
         return {
           auctionId: parseInt(auctionId),
@@ -205,7 +214,7 @@ export default function ProfilePage() {
           minBidIncrement: auctionData.minBidIncrement,
           startTime: Math.floor(now),
           endTime: Math.floor(endTime),
-          durationHours: auctionData.durationHours || Math.floor(auctionData.duration / 3600),
+          durationHours: auctionData.durationHours || auctionData.duration, // duration is already in hours
           allowPublicReveal: auctionData.allowPublicReveal,
           individualNftMetadata: auctionData.individualNftMetadata ?? null,
           nftMetadata,
@@ -1189,7 +1198,7 @@ export default function ProfilePage() {
                   startingPrice: collectionData.startingPrice,
                   reservePrice: collectionData.reservePrice,
                   minBidIncrement: collectionData.minBidIncrement,
-                  durationHours: collectionData.duration / 3600,
+                  durationHours: collectionData.duration / 3600, // Convert seconds back to hours for database
                   allowPublicReveal: collectionData.allowPublicReveal,
                   collectionImageUrl: collectionData.collectionImage,
                   collectionImageDriveId: collectionData.collectionImageDriveId,
@@ -1299,6 +1308,12 @@ export default function ProfilePage() {
       // ✅ Store selected NFT for database sync
       setSelectedAuctionNFT(nft)
 
+      console.log('🎯 Creating auction with duration:', {
+        durationHours: auctionData.duration,
+        durationSeconds: auctionData.duration * 3600,
+        endTimeInHours: auctionData.duration
+      })
+      
       await createSingleNFTAuction(
         nft.contractAddress,
         nft.tokenId,
@@ -2232,6 +2247,14 @@ export default function ProfilePage() {
                     onChange={e => setAuctionData(d => ({ ...d, duration: Number(e.target.value) }))}
                     placeholder="24"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter duration in hours (1-720 hours). Example: 24 = 24 hours, 1 = 1 hour
+                  </p>
+                  {auctionData.duration > 0 && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      ⏰ Auction will end in {auctionData.duration} hour{auctionData.duration !== 1 ? 's' : ''} from now
+                    </p>
+                  )}
                 </div>
               </div>
               <div>

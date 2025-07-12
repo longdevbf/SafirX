@@ -63,7 +63,7 @@ export function useWalletNFTs() {
     // Create truly unique ID
     const uniqueId = `${contractAddress}-${tokenId}-${index}`;
     
-    // console.log('Processing NFT:', {
+    // ('Processing NFT:', {
     //   name: nft.name,
     //   id: nft.id,
     //   contractAddress,
@@ -156,20 +156,22 @@ export function useWalletNFTs() {
     
     // ✅ Prevent rapid successive fetches (unless forced)
     if (!forceRefresh && timeSinceLastFetch < 2000) {
-      console.log('🚫 Fetch throttled - too soon since last fetch');
+      // ✅ Bỏ  spam
+      // ('🚫 Fetch throttled - too soon since last fetch');
       return;
     }
 
     fetchCountRef.current += 1;
     const currentFetchId = fetchCountRef.current;
     
-    console.log(`🚀 Starting fetch #${currentFetchId}:`, { 
-      address, 
-      limit, 
-      offset, 
-      forceRefresh,
-      isManual: isManualRefetchRef.current 
-    });
+    // ✅ Bỏ  spam
+    // (`🚀 Starting fetch #${currentFetchId}:`, { 
+    //   address, 
+    //   limit, 
+    //   offset, 
+    //   forceRefresh,
+    //   isManual: isManualRefetchRef.current 
+    // });
 
     setLoading(true);
     setError(null);
@@ -187,7 +189,8 @@ export function useWalletNFTs() {
 
       // ✅ Check if this fetch is still relevant
       if (currentFetchId !== fetchCountRef.current) {
-        console.log(`🚫 Fetch #${currentFetchId} cancelled - newer fetch in progress`);
+        // ✅ Bỏ  spam
+        // (`🚫 Fetch #${currentFetchId} cancelled - newer fetch in progress`);
         return;
       }
 
@@ -206,11 +209,12 @@ export function useWalletNFTs() {
 
       const processedNFTs: ProcessedNFT[] = data.evm_nfts?.map((nft, index) => processNFT(nft, index)) || [];
       
-      console.log(`✅ Fetch #${currentFetchId} completed:`, {
-        processedCount: processedNFTs.length,
-        totalCount: data.total_count,
-        isManual: isManualRefetchRef.current
-      });
+      // ✅ Bỏ  spam
+      // (`✅ Fetch #${currentFetchId} completed:`, {
+      //   processedCount: processedNFTs.length,
+      //   totalCount: data.total_count,
+      //   isManual: isManualRefetchRef.current
+      // });
       
       if (offset === 0) {
         setNfts(processedNFTs);
@@ -241,16 +245,16 @@ export function useWalletNFTs() {
     }
   }, [address, isConnected, processNFT]);
 
-  // ✅ Manual refetch function
+  // ✅ Manual refetch function - bỏ  spam
   const refetch = useCallback(() => {
-    console.log('🔄 Manual refetch requested');
+    // ('🔄 Manual refetch requested');
     isManualRefetchRef.current = true;
     fetchNFTs(100, 0, true);
   }, [fetchNFTs]);
 
-  // ✅ Initial fetch effect - only on mount and address/connection changes
+  // ✅ Initial fetch effect - bỏ  spam
   useEffect(() => {
-    console.log('🎯 useEffect triggered:', { address, isConnected });
+    // ('🎯 useEffect triggered:', { address, isConnected });
     
     if (address && isConnected) {
       // ✅ Only auto-fetch on initial load or address change

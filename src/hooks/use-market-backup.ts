@@ -2,12 +2,12 @@
 // import { parseEther, formatEther } from 'viem'
 // import { NFT_MARKET_CONFIG, ERC721_ABI, ContractListing, ContractCollectionListing, ListingInfo } from '@/abis/MarketABI'
 // import { Proce        if (allAvailableIds && allAvailableIds.length > 0) {
-//   console.log('🔍 DEBUG - Processing', allAvailableIds.length, 'available items (unified approach)')
-//   console.log('🔍 DEBUG - Available IDs:', allAvailableIds.map(id => id.toString()))
+//   ('🔍 DEBUG - Processing', allAvailableIds.length, 'available items (unified approach)')
+//   ('🔍 DEBUG - Available IDs:', allAvailableIds.map(id => id.toString()))
 
 //   for (const id of allAvailableIds) {
 //     try {
-//       console.log('🔍 Processing ID:', id.toString())
+//       ('🔍 Processing ID:', id.toString())
 
 //       // ✅ Use getListingInfo to get unified information
 //       const listingInfo = await readContract(config, {
@@ -17,7 +17,7 @@
 //         args: [id],
 //       }) as unknown as ListingInfo
 
-//       console.log('📋 Listing Info for ID', id.toString(), ':', {
+//       ('📋 Listing Info for ID', id.toString(), ':', {
 //         isActive: listingInfo?.isActive,
 //         isBundle: listingInfo?.isBundle,
 //         seller: listingInfo?.seller,
@@ -28,7 +28,7 @@
 //       })
 
 //       if (!listingInfo || !listingInfo.isActive) {
-//         console.log('⚠️ Skipping inactive listing:', id.toString())
+//         ('⚠️ Skipping inactive listing:', id.toString())
 //         continue
 //       } '@/interfaces/nft'
 //       import { useState, useEffect, useMemo } from 'react'
@@ -302,7 +302,7 @@
 //               const raritiesSet = new Set<string>()
 
 //               if (allAvailableIds && allAvailableIds.length > 0) {
-//                 console.log('� Processing', allAvailableIds.length, 'available items (unified approach)')
+//                 ('� Processing', allAvailableIds.length, 'available items (unified approach)')
 
 //                 for (const id of allAvailableIds) {
 //                   try {
@@ -401,7 +401,7 @@
 //                 }
 //               }
 
-//               console.log('✅ Processed NFTs (unified):', {
+//               ('✅ Processed NFTs (unified):', {
 //                 total: processedNFTs.length,
 //                 singles: processedNFTs.filter(n => !n.isBundle && !n.isFromCollection).length,
 //                 bundles: processedNFTs.filter(n => n.isBundle).length,

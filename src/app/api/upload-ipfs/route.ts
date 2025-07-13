@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for Pinata credentials
-    const PINATA_JWT = process.env.JWT
+    const PINATA_JWT = process.env.NEXT_PUBLIC_JWT
     const PINATA_GATEWAY = process.env.GATEWAY
 
     if (!PINATA_JWT) {

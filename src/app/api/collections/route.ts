@@ -175,15 +175,19 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get('content-type')
     
     if (contentType?.includes('multipart/form-data')) {
-      // Handle image upload with detailed error logging
       console.log('🔄 Processing image upload...')
       
-      // Check if Google Drive is initialized
+      // Check environment variables
+      console.log('🔍 Checking environment variables...')
+      console.log('GOOGLE_DRIVE_CLIENT_EMAIL:', !!process.env.GOOGLE_DRIVE_CLIENT_EMAIL)
+      console.log('GOOGLE_DRIVE_PRIVATE_KEY:', !!process.env.GOOGLE_DRIVE_PRIVATE_KEY)
+      console.log('GOOGLE_DRIVE_FOLDER_ID:', !!process.env.GOOGLE_DRIVE_FOLDER_ID)
+      
       if (!driveInitialized) {
         console.error('❌ Google Drive not initialized')
         return NextResponse.json({ 
           error: 'Google Drive not configured properly.',
-          details: 'Check GOOGLE_DRIVE_CLIENT_EMAIL, GOOGLE_DRIVE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID environment variables.'
+          details: 'Check environment variables'
         }, { status: 500 })
       }
       
@@ -375,9 +379,9 @@ export async function POST(request: NextRequest) {
       }
     }
   } catch (error) {
-    console.error('Collections API Error:', error)
+    console.error('❌ General error in POST:', error)
     return NextResponse.json(
-      { error: 'Failed to process collection request', details: (error as Error).message },
+      { error: 'Internal server error', details: (error as Error).message },
       { status: 500 }
     )
   }

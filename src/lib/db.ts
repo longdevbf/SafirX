@@ -724,7 +724,7 @@ export const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_auctions_active ON auctions(is_active)
     `
     
-    ('Database tables initialized successfully')
+    console.log('Database tables initialized successfully')
   } catch (error) {
     console.error('Error initializing database:', error)
     throw error
@@ -736,7 +736,7 @@ export const testConnection = async () => {
   const client = await pool.connect()
   try {
     const result = await client.query('SELECT NOW() as current_time')
-    ('Database connection successful:', result.rows[0].current_time)
+    console.log('Database connection successful:', result.rows[0].current_time)
     return true
   } catch (error) {
     console.error('Database connection failed:', error)

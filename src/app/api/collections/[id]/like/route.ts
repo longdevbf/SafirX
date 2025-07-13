@@ -8,10 +8,10 @@ const pool = new Pool({
 // ✅ POST /api/collections/[id]/like - Like/Unlike collection
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const collectionId = params.id
+    const { id: collectionId } = await params
     const body = await request.json()
     const { user_address } = body
     
@@ -104,10 +104,10 @@ export async function POST(
 // ✅ GET /api/collections/[id]/like - Check if user liked collection
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const collectionId = params.id
+    const { id: collectionId } = await params
     const { searchParams } = new URL(request.url)
     const userAddress = searchParams.get('user_address')
     

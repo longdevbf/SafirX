@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server"
 import { Pool } from "pg"
@@ -413,7 +414,7 @@ async function syncBidHistory(data: SyncBidHistoryData) {
 }
 
 // GET bid history for an auction
-export async function GET_BID_HISTORY(auctionId: string) {
+async function GET_BID_HISTORY(auctionId: string) {
   try {
     const query = `
       SELECT bidder_address, bid_amount, bid_number, bid_timestamp, visibility

@@ -8,10 +8,10 @@ const pool = new Pool({
 // ✅ GET /api/collections/[id] - Get collection details with items
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const collectionId = params.id
+    const { id: collectionId } = await params
     
     // Get collection details
     const collectionQuery = `
@@ -93,10 +93,10 @@ export async function GET(
 // ✅ PUT /api/collections/[id] - Update collection
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const collectionId = params.id
+    const { id: collectionId } = await params
     const body = await request.json()
     const {
       name,
@@ -192,10 +192,10 @@ export async function PUT(
 // ✅ DELETE /api/collections/[id] - Delete collection
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const collectionId = params.id
+    const { id: collectionId } = await params
     
     const result = await pool.query(
       'DELETE FROM collections WHERE collection_id = $1 RETURNING *',

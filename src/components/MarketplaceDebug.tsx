@@ -5,7 +5,7 @@ import { RefreshCw } from 'lucide-react'
 
 export default function MarketplaceDebug() {
   const { nfts, loading, error, total, refetch, collections, rarities } = useMarketplaceNFTs()
-  (total, rarities)
+  console.log(total, rarities)
   return (
     <Card className="mb-6 border-yellow-200 bg-yellow-50">
       <CardHeader>

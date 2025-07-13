@@ -4,10 +4,10 @@ import { listingQueries } from '@/lib/db'
 // POST /api/listings/[id]/buy - Buy NFT (mark listing as inactive)
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     const { buyer } = await request.json()
 
     if (!id) {

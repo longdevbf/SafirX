@@ -4,10 +4,10 @@ import { listingQueries } from '@/lib/db'
 // GET /api/listings/[id] - Get listing by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const listingId = params.id
+    const { id: listingId } = await params
 
     if (!listingId) {
       return NextResponse.json({ error: 'Listing ID is required' }, { status: 400 })
@@ -29,10 +29,10 @@ export async function GET(
 // PUT /api/listings/[id] - Update listing
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const listingId = params.id
+    const { id: listingId } = await params
     const body = await request.json()
 
     if (!listingId) {
@@ -73,10 +73,10 @@ export async function PUT(
 // DELETE /api/listings/[id] - Delete listing (set inactive)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const listingId = params.id
+    const { id: listingId } = await params
 
     if (!listingId) {
       return NextResponse.json({ error: 'Listing ID is required' }, { status: 400 })

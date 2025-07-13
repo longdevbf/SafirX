@@ -225,7 +225,7 @@ export default function CollectionDetailPage() {
               setIsEditDialogOpen(false)
             } else {
               // Purchase or cancel
-              await buyNFT(processingItem.collectionId || processingItem.id, address!)
+              await buyNFT(processingItem.collectionId || processingItem.id)
               toast({
                 title: "Purchase Successful!",
                 description: "Collection has been purchased successfully.",
@@ -242,7 +242,7 @@ export default function CollectionDetailPage() {
               setNewPrice("")
               setIsEditDialogOpen(false)
             } else {
-              await buyNFT(processingItem.listingId || processingItem.id, address!)
+              await buyNFT(processingItem.listingId || processingItem.id)
               toast({
                 title: "Purchase Successful!",
                 description: "NFT has been purchased successfully.",

@@ -80,8 +80,7 @@ async function uploadToGoogleDrive(file: File, fileName: string): Promise<string
     return imageUrl
   } catch (error) {
     console.error('❌ Google Drive upload error:', error)
-    
-    
+    throw error // Re-throw the error so it can be handled by the caller
   }
 }
 
@@ -333,30 +332,30 @@ export async function POST(request: NextRequest) {
             nft_attributes || '[]',
             nft_rarity || 'Common',
             is_bundle,
-            is_bundle ? items.map(i => i.token_id).join(',') : token_id,
+            is_bundle ? items.map((i: { token_id: any }) => i.token_id).join(',') : token_id,
             cover_image_url || '',
             tx_hash,
             true,
             new Date().toISOString(),
             cover_image_url || '',
             cover_image_drive_id || '',
-            JSON.stringify(items.map(i => i.nft_image || cover_image_url)),
-            JSON.stringify(items.map(i => ({ 
+            JSON.stringify(items.map((i: { nft_image: any }) => i.nft_image || cover_image_url)),
+            JSON.stringify(items.map((i: { nft_name: any; nft_description: any; nft_attributes: any }) => ({ 
               name: i.nft_name, 
               description: i.nft_description, 
               attributes: i.nft_attributes 
             }))),
-            JSON.stringify(items.map(i => i.nft_name)),
-            JSON.stringify(items.map(i => i.nft_description)),
-            JSON.stringify(items.map(i => i.token_id)),
-            JSON.stringify(items.map(i => i.price.toString())),
+            JSON.stringify(items.map((i: { nft_name: any }) => i.nft_name)),
+            JSON.stringify(items.map((i: { nft_description: any }) => i.nft_description)),
+            JSON.stringify(items.map((i: { token_id: any }) => i.token_id)),
+            JSON.stringify(items.map((i: { price: { toString: () => any } }) => i.price.toString())),
             is_bundle ? 'bundle' : (listing_type === 2 ? 'same-price' : 'individual'),
             bundle_price ? bundle_price.toString() : null,
             is_bundle ? null : price.toString(),
             true, // metadata_synced
             is_bundle ? null : collection_id, // parent_collection_id
             !is_bundle, // is_collection_item
-            is_bundle ? null : items.findIndex(i => i.token_id === token_id) + 1 // collection_position
+            is_bundle ? null : items.findIndex((i: { token_id: any }) => i.token_id === token_id) + 1 // collection_position
           ])
         }
         
@@ -378,7 +377,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Collections API Error:', error)
     return NextResponse.json(
-      { error: 'Failed to process collection request', details: error.message },
+      { error: 'Failed to process collection request', details: (error as Error).message },
       { status: 500 }
     )
   }

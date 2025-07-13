@@ -16,9 +16,9 @@ export default function TestDataPage() {
       const response = await fetch('/api/listings')
       const data = await response.json()
       setResult(`Success: Found ${data.listings?.length || 0} listings`)
-      ('Listings data:', data)
+      console.log('Listings data:', data)
     } catch (error) {
-      setResult(`Error: ${error}`)
+      setResult(`Error: ${error instanceof Error ? error.message : String(error)}`)
       console.error('Error fetching listings:', error)
     } finally {
       setLoading(false)
@@ -65,9 +65,9 @@ export default function TestDataPage() {
 
       const data = await response.json()
       setResult(`Sample NFT created successfully: ${data.listing?.listing_id}`)
-      ('Created listing:', data)
+      console.log('Created listing:', data)
     } catch (error) {
-      setResult(`Error creating sample data: ${error}`)
+      setResult(`Error creating sample data: ${error instanceof Error ? error.message : String(error)}`)
       console.error('Error creating sample data:', error)
     } finally {
       setLoading(false)
@@ -148,7 +148,7 @@ export default function TestDataPage() {
 
       const data = await response.json()
       setResult(`Sample bundle created successfully: ${data.listing?.listing_id}`)
-      ('Created bundle:', data)
+      console.log('Created bundle:', data)
     } catch (error) {
       setResult(`Error creating sample bundle: ${error}`)
       console.error('Error creating sample bundle:', error)

@@ -107,11 +107,11 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
       setCollectionImage(localPreview) // Hiển thị ảnh ngay
       
       setUploading(true)
-      ('📤 Uploading cover image to IPFS...')
+      console.log('📤 Uploading cover image to IPFS...')
       
       // 2. Upload lên IPFS trong background
       const ipfsUrl = await UploadService.uploadFileToIPFS(file)
-      ('✅ Cover image uploaded to IPFS:', ipfsUrl)
+      console.log('✅ Cover image uploaded to IPFS:', ipfsUrl)
       
       // 3. Cập nhật với IPFS URL thật sự
       setCollectionImage(ipfsUrl)

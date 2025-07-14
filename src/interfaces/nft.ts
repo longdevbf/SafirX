@@ -18,6 +18,7 @@ export interface RawNFT {
   };
 }
 export interface ProcessedNFT {
+  [x: string]: any;
   id: string
   name: string
   collection: string

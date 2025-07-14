@@ -1,8 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useMarketplaceDB } from '@/hooks/use-marketplace-db'
 import { ProcessedNFT } from '@/interfaces/nft'
+//import { toast } from '@/components/ui/use-toast'
+import { Heart } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 
 // Define context type
 interface MarketplaceContextType {
@@ -187,6 +192,12 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const refetch = async (): Promise<void> => {
     await dbRefetch()
   }
+
+  // Thêm function để refresh NFT data
+  const refreshNFTData = useCallback(async () => {
+    // Refresh data từ API
+    await refetch()
+  }, [refetch])
 
       return (
       <MarketplaceContext.Provider

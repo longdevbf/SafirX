@@ -32,6 +32,11 @@ export default function CollectionDetailPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [processingNFT, setProcessingNFT] = useState<string | null>(null)
   
+  // ✅ THÊM: State cho view và like count
+  const [viewCount, setViewCount] = useState(0)
+  const [likeCount, setLikeCount] = useState(0)
+  const [isLiked, setIsLiked] = useState(false)
+  
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
   const { 
@@ -60,6 +65,73 @@ export default function CollectionDetailPage() {
     totalItems,
     soldItems
   } = useCollectionDetailFromDB(collectionId)
+
+  // ✅ THÊM: Effect để update view count khi vào trang
+  useEffect(() => {
+    if (collectionData?.listingId) {
+      updateViewCount()
+    }
+  }, [collectionData?.listingId])
+
+  // ✅ THÊM: Effect để sync data từ collection
+  useEffect(() => {
+    if (collectionData) {
+      setViewCount(collectionData.views || 0)
+      setLikeCount(collectionData.likes || 0)
+    }
+  }, [collectionData])
+
+  // ✅ THÊM: Hàm update view count
+  const updateViewCount = async () => {
+    if (!collectionData?.listingId) return
+
+    try {
+      const response = await fetch(`/api/listings/${collectionData.listingId}/view`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.views_count) {
+          setViewCount(data.views_count)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update view count:', error)
+    }
+  }
+
+  // ✅ THÊM: Hàm handle like
+  const handleLike = async () => {
+    if (!collectionData?.listingId || isLiked) return
+
+    try {
+      const response = await fetch(`/api/listings/${collectionData.listingId}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.likes_count) {
+          setLikeCount(data.likes_count)
+          setIsLiked(true)
+          toast({
+            title: "Liked! ❤️",
+            description: "Collection has been added to your likes.",
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update like count:', error)
+      toast({
+        title: "Failed to like",
+        description: "Please try again later.",
+        variant: "destructive"
+      })
+    }
+  }
 
   // Thêm state để quản lý dialog
   const [dialogState, setDialogState] = useState<{
@@ -354,8 +426,8 @@ export default function CollectionDetailPage() {
                   )}
                 </div>
                 
-                {/* Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                {/* ✅ CẬP NHẬT: Stats với view và like count */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-blue-600">{totalItems}</div>
                     <div className="text-sm text-gray-600">Total Items</div>
@@ -369,12 +441,16 @@ export default function CollectionDetailPage() {
                     <div className="text-sm text-gray-600">Bundle Price</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-600">{collectionData.likes || 0}</div>
+                    <div className="text-2xl font-bold text-orange-600">{viewCount}</div>
+                    <div className="text-sm text-gray-600">Views</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">{likeCount}</div>
                     <div className="text-sm text-gray-600">Likes</div>
                   </div>
                 </div>
                 
-                {/* Action Buttons */}
+                {/* ✅ CẬP NHẬT: Action Buttons với nút Like */}
                 <div className="flex gap-3">
                   {isOwner(collectionData as any) ? (
                     <>
@@ -403,21 +479,42 @@ export default function CollectionDetailPage() {
                         )}
                         Cancel Listing
                       </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleLike}
+                        disabled={isLiked}
+                        className="flex-1"
+                      >
+                        <Heart className={`w-4 h-4 mr-2 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                        {isLiked ? 'Liked' : 'Like'}
+                      </Button>
                     </>
                   ) : (
-                    <Button
-                      onClick={() => handlePurchase(collectionData as any)}
-                      disabled={isProcessing(collectionData as any) || !collectionData.canPurchase}
-                      className="flex-1"
-                      size="lg"
-                    >
-                      {isProcessing(collectionData as any) ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                      )}
-                      Buy Now - {collectionData.price} ROSE
-                    </Button>
+                    <>
+                      <Button
+                        onClick={() => handlePurchase(collectionData as any)}
+                        disabled={isProcessing(collectionData as any) || !collectionData.canPurchase}
+                        className="flex-1"
+                        size="lg"
+                      >
+                        {isProcessing(collectionData as any) ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <ShoppingCart className="w-4 h-4 mr-2" />
+                        )}
+                        Buy Now - {collectionData.price} ROSE
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleLike}
+                        disabled={isLiked}
+                        className="flex-1"
+                        size="lg"
+                      >
+                        <Heart className={`w-4 h-4 mr-2 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                        {isLiked ? 'Liked' : 'Like'}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>

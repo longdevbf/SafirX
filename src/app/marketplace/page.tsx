@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
@@ -18,10 +19,10 @@ import { Label } from "@/components/ui/label"
 import { Pagination } from "@/components/ui/pagination"
 import { 
   Search, Filter, Grid3X3, List, Heart, Eye, Star, Edit, AlertCircle, 
-  RefreshCw, Loader2, ShoppingCart, Tag, X, Package, ArrowLeft, Users
+  RefreshCw, Loader2, ShoppingCart, Tag, X, Package, ArrowLeft, Users, TrendingUp
 } from "lucide-react"
 import Image from "next/image"
-//import Link from "next/link"
+import Link from "next/link"
 import { useWallet } from "@/context/walletContext"
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { useMarketplaceNFTs, useNFTMarket, useCollectionDetail } from "@/hooks/use-market"
@@ -1039,6 +1040,49 @@ export default function MarketplacePage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Thêm hàm để xử lý click vào NFT (không phải bundle)
+  const handleNFTClick = (nft: ProcessedNFT) => {
+    if (!nft.isBundle) {
+      // Chuyển đến trang chi tiết NFT
+      window.location.href = `/marketplace/nft/${nft.id || nft.listingId}`
+    }
+  }
+
+  // Thêm state để track likes
+  const [likedNFTs, setLikedNFTs] = useState<Set<string>>(new Set())
+
+  // ✅ Hàm handle like
+  const handleLike = async (nft: ProcessedNFT, event: React.MouseEvent) => {
+    event.stopPropagation() // Ngăn không cho click vào ảnh
+    
+    if (!nft.listingId) return
+
+    try {
+      const response = await fetch(`/api/listings/${nft.listingId}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.likes_count) {
+          setLikedNFTs(prev => new Set(prev).add(nft.listingId as string))
+          toast({
+            title: "Liked! ❤️",
+            description: "NFT has been added to your likes.",
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to like NFT:', error)
+      toast({
+        title: "Failed to like",
+        description: "Please try again later.",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
@@ -1271,6 +1315,9 @@ export default function MarketplacePage() {
                           onClick={() => {
                             if (nft.isBundle && nft.collectionId) {
                               handleCollectionClick(nft)
+                            } else {
+                              // ✅ THÊM: Click vào NFT để xem chi tiết
+                              handleNFTClick(nft)
                             }
                           }}
                         >
@@ -1290,8 +1337,9 @@ export default function MarketplacePage() {
                               variant="ghost"
                               size="sm"
                               className="bg-black/70 text-white hover:bg-black/80 w-8 h-8 p-0 rounded-full"
+                              onClick={(e) => handleLike(nft, e)}
                             >
-                              <Heart className="w-4 h-4" />
+                              <Heart className={`w-4 h-4 ${likedNFTs.has(nft.listingId as string) ? 'fill-red-500' : ''}`} />
                             </Button>
                           </div>
                           {nft.isBundle && (
@@ -1390,52 +1438,70 @@ export default function MarketplacePage() {
                               </div>
                             )
                           ) : isOwner(nft) ? (
-                            <div className="flex gap-2">
+                            // ✅ CẬP NHẬT: Thêm Link cho NFT thường
+                            <div className="space-y-2">
+                              <Link href={`/marketplace/nft/${nft.id || nft.listingId}`}>
+                                <Button variant="outline" className="w-full">
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </Button>
+                              </Link>
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={() => openEditDialog(nft)}
+                                >
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit Price
+                                </Button>
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm"
+                                  onClick={() => handleCancelListing(nft)}
+                                  disabled={isProcessing(nft)}
+                                >
+                                  {isProcessing(nft) ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <X className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            // ✅ CẬP NHẬT: Thêm Link cho NFT thường
+                            <div className="space-y-2">
+                              <Link href={`/marketplace/nft/${nft.id || nft.listingId}`}>
+                                <Button variant="outline" className="w-full">
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </Button>
+                              </Link>
                               <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => openEditDialog(nft)}
-                              >
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Price
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm"
-                                onClick={() => handleCancelListing(nft)}
-                                disabled={isProcessing(nft)}
+                                className="w-full" 
+                                onClick={() => handlePurchase(nft)}
+                                disabled={isProcessing(nft) || !nft.canPurchase}
                               >
                                 {isProcessing(nft) ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    Processing...
+                                  </>
+                                ) : !isConnected ? (
+                                  <>
+                                    <ShoppingCart className="w-4 h-4 mr-2" />
+                                    Connect Wallet to Buy
+                                  </>
                                 ) : (
-                                  <X className="w-4 h-4" />
+                                  <>
+                                    <ShoppingCart className="w-4 h-4 mr-2" />
+                                    Buy Now
+                                  </>
                                 )}
                               </Button>
                             </div>
-                          ) : (
-                            <Button 
-                              className="w-full" 
-                              onClick={() => handlePurchase(nft)}
-                              disabled={isProcessing(nft) || !nft.canPurchase}
-                            >
-                              {isProcessing(nft) ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                  Processing...
-                                </>
-                              ) : !isConnected ? (
-                                <>
-                                  <ShoppingCart className="w-4 h-4 mr-2" />
-                                  Connect Wallet to Buy
-                                </>
-                              ) : (
-                                <>
-                                  <ShoppingCart className="w-4 h-4 mr-2" />
-                                  Buy Now
-                                </>
-                              )}
-                            </Button>
                           )}
                         </CardContent>
                       </Card>

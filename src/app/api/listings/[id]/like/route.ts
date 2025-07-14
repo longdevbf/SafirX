@@ -1,47 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { pool } from '@/lib/db'
+import db from '@/lib/db'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: listingId } = await params
+    const listingId = params.id
 
-    if (!listingId) {
-      return NextResponse.json(
-        { error: 'Listing ID is required' },
-        { status: 400 }
-      )
+    // Update like count
+    const result = await db.sql`
+      UPDATE listings 
+      SET likes_count = likes_count + 1, updated_at = NOW()
+      WHERE listing_id = ${listingId}
+      RETURNING likes_count
+    `
+
+    if (!result || !Array.isArray(result) || result.length === 0) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Listing not found' 
+      }, { status: 404 })
     }
 
-    // Increment likes count
-    const result = await pool.query(
-      `UPDATE listings 
-       SET likes_count = likes_count + 1, 
-           updated_at = CURRENT_TIMESTAMP
-       WHERE listing_id = $1 
-       RETURNING likes_count`,
-      [listingId]
-    )
-
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Listing not found' },
-        { status: 404 }
-      )
-    }
-
-    return NextResponse.json({
-      message: 'Listing liked successfully',
-      likes_count: result.rows[0].likes_count
+    return NextResponse.json({ 
+      success: true, 
+      likes_count: result[0].likes_count 
     })
 
   } catch (error) {
-    console.error('Error liking listing:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('❌ Error updating like count:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to update like count' 
+    }, { status: 500 })
   }
 }

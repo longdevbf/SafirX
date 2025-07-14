@@ -12,6 +12,12 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    console.log(` Finalizing auction ${auctionId} with:`, {
+      txHash,
+      winnerAddress,
+      finalPrice
+    })
+
     // Update auction state to FINALIZED
     const result = await db.sql`
       UPDATE auctions 
@@ -27,13 +33,14 @@ export async function POST(request: NextRequest) {
     `
 
     if (!result || !Array.isArray(result) || result.length === 0) {
+      console.error(`❌ Auction ${auctionId} not found in database`)
       return NextResponse.json({ 
         success: false, 
         error: 'Auction not found' 
       }, { status: 404 })
     }
 
-     //auction ${auctionId} to FINALIZED state`)
+    console.log(`✅ Auction ${auctionId} finalized successfully:`, result[0])
 
     return NextResponse.json({ 
       success: true, 

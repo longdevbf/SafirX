@@ -378,40 +378,60 @@ export default function AuctionsPage() {
                 description: "Transaction submitted. Please wait for confirmation...",
             })
 
-            // Wait for transaction confirmation
-            const { isConfirmed } = await new Promise<{ isConfirmed: boolean }>((resolve) => {
-                const checkConfirmation = () => {
-                    if (isConfirmed) {
-                        resolve({ isConfirmed: true })
-                    } else {
-                        setTimeout(checkConfirmation, 2000) // Check every 2 seconds
-                    }
+            // ✅ FIX: Wait for transaction confirmation properly with timeout
+            let confirmed = false
+            const maxAttempts = 30 // 60 seconds max wait
+            let attempts = 0
+            
+            while (!confirmed && attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
+                attempts++
+                
+                // Check if transaction is confirmed
+                if (isConfirmed) {
+                    confirmed = true
                 }
-                checkConfirmation()
-            })
+            }
 
-            if (isConfirmed) {
-                // ✅ Update database with finalization details
+            if (confirmed) {
+                // ✅ FIX: Update database with finalization details
                 try {
                     const auction = processedGroupedAuctions.ended.find(
                         a => a.auctionId.toString() === auctionId
                     )
                     
                     if (auction) {
-                        await fetch('/api/auctions/finalize', {
+                        console.log('🔄 Updating database for auction:', auctionId)
+                        
+                        const response = await fetch('/api/auctions/finalize', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                auctionId,
+                                auctionId: parseInt(auctionId),
                                 txHash,
                                 winnerAddress: auction.highestBidder,
-                                finalPrice: auction.finalPrice
+                                finalPrice: auction.finalPrice?.toString()
                             })
                         })
+                        
+                        if (!response.ok) {
+                            const errorData = await response.text()
+                            console.error('❌ Database update failed:', errorData)
+                            throw new Error(`Database update failed: ${response.status}`)
+                        }
+                        
+                        const result = await response.json()
+                        console.log('✅ Database updated successfully:', result)
+                    } else {
+                        console.warn('⚠️ Auction not found in ended list:', auctionId)
                     }
                 } catch (dbError) {
-                    console.warn('Failed to update database:', dbError)
-                    // Don't fail the whole operation if DB update fails
+                    console.error('❌ Failed to update database:', dbError)
+                    toast({
+                        title: "⚠️ Database Update Failed",
+                        description: "Auction finalized on blockchain but database update failed. Please refresh the page.",
+                        variant: "destructive"
+                    })
                 }
 
                 toast({
@@ -421,10 +441,15 @@ export default function AuctionsPage() {
 
                 // Refresh auction data
                 refetch()
+            } else {
+                toast({
+                    title: "⚠️ Transaction Pending",
+                    description: "Transaction submitted but confirmation is taking longer than expected. Please check your wallet.",
+                })
             }
 
         } catch (error) {
-            console.error('Error finalizing auction:', error)
+            console.error('❌ Error finalizing auction:', error)
             toast({
                 title: "❌ Finalization Failed",
                 description: error instanceof Error ? error.message : "Failed to finalize auction",

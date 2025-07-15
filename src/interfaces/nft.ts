@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface NFTAttribute {
   trait_type: string;
   value: string;

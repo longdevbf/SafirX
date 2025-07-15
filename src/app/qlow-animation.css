@@ -1,0 +1,35 @@
+@keyframes glowPulse {
+    0% {
+      text-shadow: 
+        0 0 2px #fff,
+        0 0 4px #8b5cf6,
+        0 0 6px #8b5cf6,
+        0 0 8px #3b82f6;
+    }
+    50% {
+      text-shadow: 
+        0 0 4px #fff,
+        0 0 8px #a855f7,
+        0 0 12px #6366f1,
+        0 0 16px #06b6d4;
+    }
+    100% {
+      text-shadow: 
+        0 0 2px #fff,
+        0 0 4px #8b5cf6,
+        0 0 6px #8b5cf6,
+        0 0 8px #3b82f6;
+    }
+  }
+  
+  .glow-text {
+    animation: glowPulse 6s ease-in-out infinite;
+    color: #fff;
+    font-weight: bold;
+  }
+  
+  .glow-gradient {
+    animation: glowPulse 6s ease-in-out infinite;
+    color: #fff;
+    font-weight: bold;
+  }

@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { Star, Clock, Eye } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import "./qlow-animation.css"
+import "./background-effects.css"
 
 export default function HomePage() {
   const featuredCollections = [
@@ -18,8 +20,8 @@ export default function HomePage() {
     },
     {
       id: 2,
-      name: "Cosmic Apes Genesis",
-      image: "/assets/monkey2.jpeg",
+      name: "Cosmic Apes Cool",
+      image: "/assets/cool.jpg",
       floorPrice: "4.2 ROSE",
       volume: "2,567 ROSE",
       items: "1,000",
@@ -114,6 +116,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white">
+        {/* Background Image */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
@@ -121,11 +124,36 @@ export default function HomePage() {
           }}
         />
         <div className="absolute inset-0 bg-black/60" />
-        <div className="relative container mx-auto px-4 py-24">
-          <div className="max-w-4xl mx-auto text-center">
+        
+        {/* Particle Effects */}
+        <div className="absolute inset-0 overflow-hidden">
+          {[...Array(100)].map((_, i) => (
+            <div
+              key={i}
+              className="particle"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 80 + 10}%`,
+                animationDelay: `${Math.random() * 8}s`
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Wave Effect (bật/tắt thử nghiệm bằng cách comment/uncomment) */}
+        {/* <div className="wave-effect"></div> */}
+
+        {/* Grid Effect */}
+        {/* <div className="grid-effect"></div> */}
+
+        {/* Gradient Rotation */}
+        {/* <div className="rotating-gradient"></div> */}
+
+        <div className="relative container mx-auto px-4 py-52">
+          <div className="max-w-4xl mx-auto text-center mt-1">
             <h1 className="text-5xl md:text-7xl font-bold mb-6">
-              Discover, Create & Trade
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
+              <span className="glow-text">Discover, Create & Trade</span>
+              <span className="block glow-text">
                 Extraordinary NFTs
               </span>
             </h1>

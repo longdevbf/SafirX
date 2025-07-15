@@ -694,7 +694,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           contractAddress,
           owner: address,
-          marketAddress: '0x8002ac81e5f35fA4C4a3972f021e317EC2fCa4fF'
+          marketAddress: '0x329Add063f3fcCb700eAb5525AD3E8127ea050a1'
         })
       })
 
@@ -901,7 +901,7 @@ export default function ProfilePage() {
             body: JSON.stringify({
               contractAddress: selectedNFT.contractAddress,
               owner: address,
-              marketAddress: '0x8002ac81e5f35fA4C4a3972f021e317EC2fCa4fF'
+              marketAddress: '0x329Add063f3fcCb700eAb5525AD3E8127ea050a1'
             })
           })
 
@@ -917,7 +917,7 @@ export default function ProfilePage() {
               address: selectedNFT.contractAddress as `0x${string}`,
               abi: ERC721_ABI,
               functionName: 'isApprovedForAll',
-              args: [address as `0x${string}`, '0xd1DCE6BF2716310753Fc662B044D323a9EFC3B4' as `0x${string}`]
+              args: [address as `0x${string}`, '0x329Add063f3fcCb700eAb5525AD3E8127ea050a1' as `0x${string}`]
             })
             isApproved = Boolean(approvalStatus)
             console.log('🔗 Direct contract approval check result:', isApproved)

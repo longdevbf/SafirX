@@ -1,5 +1,7 @@
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+// wagmiConfig.ts
+import { createConfig, http } from 'wagmi';
 import { mainnet, sapphireTestnet } from 'wagmi/chains';
+import { injectedWithSapphire, sapphireHttpTransport } from '@oasisprotocol/sapphire-wagmi-v2';
 
 const oasisSapphire = {
   id: 0x5afe,
@@ -18,13 +20,17 @@ const oasisSapphire = {
     },
   },
   blockExplorers: {
-    default: { name: 'Oasis Explorer', url: 'https://explorer.oasis.io/mainnet/sapphire' },
+    default: { name: 'Oasis Explorer', url: 'https://explorer.oasis.io/testnet/sapphire' },
   },
 } as const;
 
-export const config = getDefaultConfig({
-  appName: 'Oasis',
-  projectId: `${process.env.PROJECT_ID}`, 
+export const config = createConfig({
+  multiInjectedProviderDiscovery: false,
   chains: [oasisSapphire, sapphireTestnet, mainnet],
-  ssr: true,
+  connectors: [injectedWithSapphire()],
+  transports: {
+    [oasisSapphire.id]: sapphireHttpTransport(),
+    [sapphireTestnet.id]: sapphireHttpTransport(),
+    [mainnet.id]: http(),
+  },
 });

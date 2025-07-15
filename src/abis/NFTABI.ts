@@ -92,6 +92,6 @@ export const NFT_ABI = [
 ] as const
 
 export const NFT_CONTRACT_CONFIG = {
-  address: '0x61fc08123a1c2DeAb39e0f32b1Cb90cc094fe3E6' as Address,
+  address: '0x100DEf7c344194df0D204584C5e1A4AfA2EE3035' as Address,
   abi: NFT_ABI,
 }

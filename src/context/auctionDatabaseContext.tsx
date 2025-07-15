@@ -229,10 +229,20 @@ export function AuctionDatabaseProvider({ children }: { children: ReactNode }) {
     ))
   }, [])
 
-  // ✅ Group auctions by state
+  // ✅ Group auctions by state - tính toán timeRemaining động
   const groupedAuctions: GroupedAuctions = {
-    active: auctions.filter(a => a.state === 'ACTIVE' && a.timeRemaining > 0),
-    ended: auctions.filter(a => a.state === 'ENDED' || (a.state === 'ACTIVE' && a.timeRemaining <= 0)),
+    active: auctions.filter(a => {
+      const now = Date.now()
+      const endTime = new Date(a.end_time).getTime()
+      const timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000))
+      return a.state === 'ACTIVE' && timeRemaining > 0
+    }),
+    ended: auctions.filter(a => {
+      const now = Date.now()
+      const endTime = new Date(a.end_time).getTime()
+      const timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000))
+      return a.state === 'ENDED' || (a.state === 'ACTIVE' && timeRemaining <= 0)
+    }),
     finalized: auctions.filter(a => a.state === 'FINALIZED'),
     cancelled: auctions.filter(a => a.state === 'CANCELLED')
   }
@@ -244,27 +254,6 @@ export function AuctionDatabaseProvider({ children }: { children: ReactNode }) {
     totalFinalized: groupedAuctions.finalized.length,
     userAuctions: address ? auctions.filter(a => a.seller_address.toLowerCase() === address.toLowerCase()).length : 0
   }
-
-  // ✅ Auto-refresh timer for countdown
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now()
-      
-      setAuctions(prev => prev.map(auction => {
-        const endTime = new Date(auction.end_time).getTime()
-        const timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000))
-        
-        return {
-          ...auction,
-          timeRemaining,
-          isActive: auction.state === 'ACTIVE' && timeRemaining > 0,
-          isEnded: auction.state === 'ENDED' || (auction.state === 'ACTIVE' && timeRemaining === 0)
-        }
-      }))
-    }, 1000) // Update every second for countdown
-
-    return () => clearInterval(interval)
-  }, [])
 
   // ✅ Initial fetch
   useEffect(() => {
@@ -345,15 +334,19 @@ export function useAuctionCountdown(endTime: string) {
     return () => clearInterval(interval)
   }, [endTime])
 
-  // ✅ Format time remaining
-  const formatTimeRemaining = (seconds: number) => {
-    if (seconds <= 0) return "Ended"
+  // ✅ Format time remaining - tính toán động
+  const formatTimeRemaining = (endTime: string) => {
+    const now = Date.now()
+    const end = new Date(endTime).getTime()
+    const seconds = Math.max(0, Math.floor((end - now) / 1000))
     
+    if (seconds <= 0) return "Ended"
+
     const days = Math.floor(seconds / 86400)
     const hours = Math.floor((seconds % 86400) / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     const secs = seconds % 60
-    
+
     if (days > 0) return `${days}d ${hours}h ${minutes}m`
     if (hours > 0) return `${hours}h ${minutes}m ${secs}s`
     if (minutes > 0) return `${minutes}m ${secs}s`
@@ -362,7 +355,7 @@ export function useAuctionCountdown(endTime: string) {
 
   return {
     timeRemaining,
-    formatted: formatTimeRemaining(timeRemaining),
+    formatted: formatTimeRemaining(endTime),
     isEnded: timeRemaining <= 0
   }
 }

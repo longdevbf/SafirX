@@ -53,7 +53,7 @@ import { ProcessedNFT } from "@/interfaces/nft"
 import UserSettings from "@/components/UserSettings"
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { useNFTMarket } from "@/hooks/use-market"
-import { useSealedBidAuction } from "@/hooks/use-auction"
+import  useSealedBidAuction  from "@/hooks/use-auction"
 import { useAuctionApproval } from "@/hooks/use-auction-approval"
 import CollectionSelector, { CollectionSellData } from "@/components/collectionSelection"
 import AuctionCollectionSelector, { CollectionAuctionData } from "@/components/AuctionCollectionSelector"
@@ -66,7 +66,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { syncListingToDatabase, syncAuctionToDatabase, prepareListingData, prepareAuctionData } from "@/utils/syncToDatabase"
 import { getListingIdFromTransaction, getLatestListingIdForUser } from "@/utils/getListingIdFromTransaction"
 import { keccak256, toHex } from "viem"
-
+//import { publicClient } from "wagmi"
+import { SEALED_BID_AUCTION_CONFIG } from "@/abis/AuctionSealedBid"
 interface UserProfile {
   name: string
   description: string
@@ -105,7 +106,6 @@ export default function ProfilePage() {
     reservePrice: "",
     minBidIncrement: "0.1",
     duration: 24,
-    allowPublicReveal: false,
     title: "",
     description: ""
   })
@@ -186,7 +186,6 @@ export default function ProfilePage() {
         nftMetadata?: any
       ) => {
         const now = Date.now() / 1000
-        // ✅ FIXED: auctionData.duration is in hours, convert to seconds
         const endTime = now + ((auctionData.duration || auctionData.durationHours) * 3600)
         
         console.log('📊 Auction timing calculation:', {
@@ -214,8 +213,8 @@ export default function ProfilePage() {
           minBidIncrement: auctionData.minBidIncrement,
           startTime: Math.floor(now),
           endTime: Math.floor(endTime),
-          durationHours: auctionData.durationHours || auctionData.duration, // duration is already in hours
-          allowPublicReveal: auctionData.allowPublicReveal,
+          durationHours: auctionData.durationHours || auctionData.duration,
+          allowPublicReveal: false,
           individualNftMetadata: auctionData.individualNftMetadata ?? null,
           nftMetadata,
           creationTxHash: txHash
@@ -223,48 +222,71 @@ export default function ProfilePage() {
       },
       getAuctionIdFromTransaction: async (txHash: string) => {
         try {
-          console.log('🔍 Getting auction ID from transaction:', txHash)
+          console.log(' Getting auction ID from transaction:', txHash)
           
-          // Get transaction receipt using fetch
-          const response = await fetch('https://testnet.sapphire.oasis.io/', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              method: 'eth_getTransactionReceipt',
-              params: [txHash],
-              id: 1,
-            }),
-          })
+          // ✅ Tăng delay và thêm retry
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            console.log(`🔄 Attempt ${attempt}/5 to get transaction receipt`)
+            
+            // ✅ Tăng delay theo attempt (tối đa 30 giây)
+            await new Promise(resolve => setTimeout(resolve, 3000 * attempt))
+            
+            // ✅ Dùng RPC endpoint đúng cho Oasis Sapphire
+            const response = await fetch('https://testnet.sapphire.oasis.io/', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'eth_getTransactionReceipt',
+                params: [txHash],
+                id: 1,
+              }),
+            })
 
-          const data = await response.json()
-          const receipt = data.result
+            const data = await response.json()
+            const receipt = data.result
 
-          if (!receipt || !receipt.logs) {
-            console.error('❌ No receipt or logs found')
-            return { auctionId: null, type: 'single' }
-          }
+            console.log(` Attempt ${attempt} - Receipt:`, receipt)
+            console.log(` Attempt ${attempt} - Status:`, receipt?.status)
+            console.log(` Attempt ${attempt} - Logs:`, receipt?.logs)
 
-          // Parse AuctionCreated event from logs
-          // Event signature: AuctionCreated(uint256 indexed auctionId, address indexed seller, ...)
-          const auctionCreatedTopic = keccak256(toHex('AuctionCreated(uint256,address,address,uint8,uint256,uint256[],uint256,uint256,string,bool)'))
-          
-          for (const log of receipt.logs) {
-            if (log.topics && log.topics[0] === auctionCreatedTopic) {
-              // First topic is event signature, second is auctionId
-              const auctionId = parseInt(log.topics[1], 16)
-              console.log('✅ Found auction ID from blockchain:', auctionId)
-              return { auctionId: auctionId.toString(), type: 'single' }
+            if (receipt) {
+              // ✅ Kiểm tra transaction status
+              if (receipt.status === '0x0') {
+                console.error('❌ Transaction failed! Status is 0x0')
+                console.error('❌ This means the contract function reverted')
+                console.error('❌ Possible causes: NFT not approved, invalid parameters, or insufficient gas')
+                return { auctionId: null, type: 'single' }
+              }
+
+              if (receipt.logs && receipt.logs.length > 0) {
+                // ✅ Đúng event signature
+                const auctionCreatedTopic = keccak256(toHex('AuctionCreated(uint256,address,address,uint8,uint256,uint256[],uint256,uint256,string)'))
+                
+                const auctionLog = receipt.logs.find((log: any) => 
+                  log.topics[0] === auctionCreatedTopic
+                )
+
+                if (auctionLog) {
+                  // ✅ Decode auctionId từ topic[1] - đây là auction ID thực từ contract
+                  const auctionId = Number(auctionLog.topics[1])
+                  console.log('🎯 Found auction ID from contract:', auctionId)
+                  return { auctionId, type: 'single' }
+                } else {
+                  console.log(`⚠️ Attempt ${attempt} - AuctionCreated event not found in logs`)
+                }
+              } else {
+                console.log(`⚠️ Attempt ${attempt} - No logs found (transaction may have failed)`)
+              }
+            } else {
+              console.log(`⚠️ Attempt ${attempt} - No receipt found`)
             }
           }
 
-          console.error('❌ AuctionCreated event not found in logs')
+          console.error('❌ All attempts failed to get auction ID from contract')
           return { auctionId: null, type: 'single' }
-
         } catch (error) {
-          console.error('❌ Error parsing transaction:', error)
+          console.error('❌ Error getting auction ID from contract:', error)
           return { auctionId: null, type: 'single' }
         }
       }
@@ -1107,7 +1129,7 @@ export default function ProfilePage() {
           if (selectedAuctionNFT) {
             // Single NFT auction
             auctionDataForDb = prepareAuctionData(
-              auctionId,
+              auctionId.toString(),
               selectedAuctionNFT.contractAddress,
               selectedAuctionNFT.tokenId,
               null,
@@ -1120,7 +1142,7 @@ export default function ProfilePage() {
                 reservePrice: auctionData.reservePrice,
                 minBidIncrement: auctionData.minBidIncrement,
                 duration: auctionData.duration,
-                allowPublicReveal: auctionData.allowPublicReveal
+                // ❌ Xóa allowPublicReveal: auctionData.allowPublicReveal
               },
               auctionHash,
               {
@@ -1186,7 +1208,7 @@ export default function ProfilePage() {
               })
 
               auctionDataForDb = prepareAuctionData(
-                auctionId,
+                auctionId.toString(),
                 collectionData.nftContract,
                 null,
                 collectionData.tokenIds,
@@ -1199,7 +1221,7 @@ export default function ProfilePage() {
                   reservePrice: collectionData.reservePrice,
                   minBidIncrement: collectionData.minBidIncrement,
                   durationHours: collectionData.duration / 3600, // Convert seconds back to hours for database
-                  allowPublicReveal: collectionData.allowPublicReveal,
+                  // ❌ Xóa allowPublicReveal: collectionData.allowPublicReveal,
                   collectionImageUrl: collectionData.collectionImage,
                   collectionImageDriveId: collectionData.collectionImageDriveId,
                   individualNftMetadata: individualNftMetadata
@@ -1276,7 +1298,6 @@ export default function ProfilePage() {
         reservePrice: "",
         minBidIncrement: "0.1",
         duration: 24,
-        allowPublicReveal: false,
         title: "",
         description: ""
       })
@@ -1293,7 +1314,7 @@ export default function ProfilePage() {
     if (!address || !auctionData.title || !auctionData.startingPrice || !auctionData.reservePrice) return
 
     try {
-      // ✅ Check approval first
+      // ✅ Check approval cho auction contract (KHÁC với marketplace approval)
       if (!isAuctionApproved) {
         toast({
           title: "🔒 Approval Required",
@@ -1304,24 +1325,21 @@ export default function ProfilePage() {
       }
 
       console.log('🎯 Creating single NFT auction for:', nft.name)
+      console.log('🔍 NFT contract:', nft.contractAddress)
+      console.log('🔍 Token ID:', nft.tokenId)
+      console.log('💰 Starting price:', auctionData.startingPrice)
+      console.log('💰 Reserve price:', auctionData.reservePrice)
 
       // ✅ Store selected NFT for database sync
       setSelectedAuctionNFT(nft)
 
-      console.log('🎯 Creating auction with duration:', {
-        durationHours: auctionData.duration,
-        durationSeconds: auctionData.duration * 3600,
-        endTimeInHours: auctionData.duration
-      })
-      
       await createSingleNFTAuction(
-        nft.contractAddress,
-        nft.tokenId,
+        nft.contractAddress as `0x${string}`,
+        Number(nft.tokenId),
         auctionData.startingPrice,
         auctionData.reservePrice,
         auctionData.minBidIncrement,
         auctionData.duration * 3600, // Convert hours to seconds
-        auctionData.allowPublicReveal,
         auctionData.title,
         auctionData.description
       )
@@ -1335,11 +1353,20 @@ export default function ProfilePage() {
       console.error('❌ Single NFT auction creation failed:', error)
       const errorMessage = error as string || error?.toString() || "Failed to create auction"
 
-      toast({
-        title: "❌ Auction Creation Failed",
-        description: errorMessage,
-        variant: "destructive"
-      })
+      // ✅ Hiển thị lỗi chi tiết
+      if (errorMessage.includes('not approved')) {
+        toast({
+          title: "❌ NFT Not Approved",
+          description: "Please approve your NFT for the auction contract first.",
+          variant: "destructive"
+        })
+      } else {
+        toast({
+          title: "❌ Auction Creation Failed",
+          description: errorMessage,
+          variant: "destructive"
+        })
+      }
     }
   }
 
@@ -1372,13 +1399,12 @@ export default function ProfilePage() {
 
       // ✅ Call contract to create auction
       await createCollectionAuction(
-        data.nftContract,
-        data.tokenIds,
+        data.nftContract as `0x${string}`,
+        data.tokenIds.map(Number),
         data.startingPrice,
         data.reservePrice,
         data.minBidIncrement,
         data.duration, // Already in seconds from AuctionCollectionSelector
-        data.allowPublicReveal,
         data.title,
         data.description
       )
@@ -2274,30 +2300,6 @@ export default function ProfilePage() {
                   rows={2}
                   placeholder="Describe your auction..."
                 />
-              </div>
-              
-              {/* Public Reveal Option - Made more prominent */}
-              <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="allowPublicReveal"
-                    checked={auctionData.allowPublicReveal}
-                    onCheckedChange={(v: boolean | "indeterminate") => setAuctionData(d => ({ ...d, allowPublicReveal: !!v }))}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="allowPublicReveal" className="font-medium text-blue-900">
-                      Allow Public Bid History
-                    </Label>
-                    <p className="text-sm text-blue-700 mt-1">
-                      After the auction ends, you can choose to make all bid amounts and bidders public for transparency. 
-                      This setting enables the option - you can still decide later whether to reveal the bids.
-                    </p>
-                    <p className="text-xs text-blue-600 mt-2">
-                      ✨ Recommended: This builds trust and transparency with bidders
-                    </p>
-                  </div>
-                </div>
               </div>
               
               {/* Status & Actions */}

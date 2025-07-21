@@ -2,7 +2,7 @@
 import { useCallback } from 'react';
 import { Address, parseEther } from 'viem';
 import { useReadContract, useWriteContract } from 'wagmi';
-import SealedBidAuctionABI from '@/abis/AuctionSealedBid.json';
+import { SEALED_BID_AUCTION_CONFIG } from '@/abis/AuctionSealedBid';
 
 interface Bid {
   bidder: Address;
@@ -11,11 +11,7 @@ interface Bid {
   deposit: string;
 }
 
-interface UseSealedBidAuctionProps {
-  contractAddress: Address;
-}
-
-const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
+const useSealedBidAuction = () => {
   const { writeContractAsync, data, error, isPending, isSuccess } = useWriteContract();
 
   // Tạo auction cho single NFT
@@ -32,8 +28,8 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
     ) => {
       try {
         const tx = await writeContractAsync({
-          address: contractAddress,
-          abi: SealedBidAuctionABI,
+          address: SEALED_BID_AUCTION_CONFIG.address,
+          abi: SEALED_BID_AUCTION_CONFIG.abi,
           functionName: 'createSingleNFTAuction',
           args: [
             nftContract,
@@ -52,7 +48,7 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
         throw error;
       }
     },
-    [contractAddress, writeContractAsync]
+    [writeContractAsync]
   );
 
   // Tạo auction cho collection NFT
@@ -69,8 +65,8 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
     ) => {
       try {
         const tx = await writeContractAsync({
-          address: contractAddress,
-          abi: SealedBidAuctionABI,
+          address: SEALED_BID_AUCTION_CONFIG.address,
+          abi: SEALED_BID_AUCTION_CONFIG.abi,
           functionName: 'createCollectionAuction',
           args: [
             nftContract,
@@ -89,7 +85,7 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
         throw error;
       }
     },
-    [contractAddress, writeContractAsync]
+    [writeContractAsync]
   );
 
   // Đặt bid cho auction
@@ -97,8 +93,8 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
     async (auctionId: number, bidAmount: string, startingPrice: string) => {
       try {
         const tx = await writeContractAsync({
-          address: contractAddress,
-          abi: SealedBidAuctionABI,
+          address: SEALED_BID_AUCTION_CONFIG.address,
+          abi: SEALED_BID_AUCTION_CONFIG.abi,
           functionName: 'placeBid',
           args: [BigInt(auctionId), parseEther(bidAmount)],
           value: parseEther(startingPrice),
@@ -109,7 +105,7 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
         throw error;
       }
     },
-    [contractAddress, writeContractAsync]
+    [writeContractAsync]
   );
 
   // Finalize auction
@@ -117,8 +113,8 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
     async (auctionId: number) => {
       try {
         const tx = await writeContractAsync({
-          address: contractAddress,
-          abi: SealedBidAuctionABI,
+          address: SEALED_BID_AUCTION_CONFIG.address,
+          abi: SEALED_BID_AUCTION_CONFIG.abi,
           functionName: 'finalizeAuction',
           args: [BigInt(auctionId)],
         });
@@ -128,7 +124,7 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
         throw error;
       }
     },
-    [contractAddress, writeContractAsync]
+    [writeContractAsync]
   );
 
   // Hủy auction
@@ -136,8 +132,8 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
     async (auctionId: number) => {
       try {
         const tx = await writeContractAsync({
-          address: contractAddress,
-          abi: SealedBidAuctionABI,
+          address: SEALED_BID_AUCTION_CONFIG.address,
+          abi: SEALED_BID_AUCTION_CONFIG.abi,
           functionName: 'cancelAuction',
           args: [BigInt(auctionId)],
         });
@@ -147,7 +143,7 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
         throw error;
       }
     },
-    [contractAddress, writeContractAsync]
+    [writeContractAsync]
   );
 
   // Claim NFT
@@ -155,8 +151,8 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
     async (auctionId: number, remainingAmount: string) => {
       try {
         const tx = await writeContractAsync({
-          address: contractAddress,
-          abi: SealedBidAuctionABI,
+          address: SEALED_BID_AUCTION_CONFIG.address,
+          abi: SEALED_BID_AUCTION_CONFIG.abi,
           functionName: 'claimNFT',
           args: [BigInt(auctionId)],
           value: parseEther(remainingAmount),
@@ -167,7 +163,7 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
         throw error;
       }
     },
-    [contractAddress, writeContractAsync]
+    [writeContractAsync]
   );
 
   // Reclaim NFT
@@ -175,8 +171,8 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
     async (auctionId: number) => {
       try {
         const tx = await writeContractAsync({
-          address: contractAddress,
-          abi: SealedBidAuctionABI,
+          address: SEALED_BID_AUCTION_CONFIG.address,
+          abi: SEALED_BID_AUCTION_CONFIG.abi,
           functionName: 'reclaimNFT',
           args: [BigInt(auctionId)],
         });
@@ -186,14 +182,14 @@ const useSealedBidAuction = ({ contractAddress }: UseSealedBidAuctionProps) => {
         throw error;
       }
     },
-    [contractAddress, writeContractAsync]
+    [writeContractAsync]
   );
 
   // Hook riêng cho getAuctionBids
   const useGetAuctionBids = (auctionId: number) => {
     return useReadContract({
-      address: contractAddress,
-      abi: SealedBidAuctionABI,
+      address: SEALED_BID_AUCTION_CONFIG.address,
+      abi: SEALED_BID_AUCTION_CONFIG.abi,
       functionName: 'getAuctionBids',
       args: [BigInt(auctionId)],
       query: { enabled: !!auctionId },

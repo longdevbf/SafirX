@@ -22,7 +22,7 @@ const useSealedBidAuction = () => {
       startingPrice: string,
       reservePrice: string,
       minBidIncrement: string,
-      duration: number,
+      duration: number, // ✅ Đây là giờ từ UI
       title: string,
       description: string
     ) => {
@@ -37,7 +37,7 @@ const useSealedBidAuction = () => {
             parseEther(startingPrice),
             parseEther(reservePrice),
             parseEther(minBidIncrement),
-            BigInt(duration),
+            BigInt(duration * 3600), // ✅ Convert giờ sang giây cho smart contract
             title,
             description,
           ],
@@ -59,7 +59,7 @@ const useSealedBidAuction = () => {
       startingPrice: string,
       reservePrice: string,
       minBidIncrement: string,
-      duration: number,
+      duration: number, // ✅ Đây là giờ từ UI
       title: string,
       description: string
     ) => {
@@ -74,7 +74,7 @@ const useSealedBidAuction = () => {
             parseEther(startingPrice),
             parseEther(reservePrice),
             parseEther(minBidIncrement),
-            BigInt(duration),
+            BigInt(duration * 3600), // ✅ Convert giờ sang giây cho smart contract
             title,
             description,
           ],

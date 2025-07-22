@@ -113,70 +113,71 @@ export async function syncListingToDatabase(data: SyncListingData): Promise<bool
   }
 }
 
-// Sync auction to database
-export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<boolean> {
+// ✅ Sửa syncAuctionToDatabase - lưu giờ vào database
+export async function syncAuctionToDatabase(auctionData: any): Promise<boolean> {
   try {
-    console.log('🔄 Syncing auction to database:', data.auction_id)
+    console.log(' Syncing auction to database:', auctionData.auction_id)
+    console.log('📊 Full auction data:', JSON.stringify(auctionData, null, 2))
     
-    // ✅ DEBUG: Log the individual_nft_metadata
-    console.log('🔍 DEBUG individual_nft_metadata:', {
-      is_collection: data.is_collection,
-      individual_nft_metadata: data.individual_nft_metadata,
-      individual_count: data.individual_nft_metadata?.length || 0,
-      first_item: data.individual_nft_metadata?.[0] || null
-    })
-    
-    // Transform data to match API expectations
-    const apiData = {
-      action: 'create',
-      auctionId: parseInt(data.auction_id),
-      auctionType: data.is_collection ? 'COLLECTION' : 'SINGLE_NFT',
-      title: data.name,
-      description: data.description,
-      sellerAddress: data.seller,
-      nftContract: data.nft_contract,
-      tokenId: data.token_id ? parseInt(data.token_id) : undefined,
-      tokenIds: data.collection_token_ids?.map(id => parseInt(id)),
-      nftCount: data.is_collection ? data.collection_token_ids?.length : 1,
-      collectionImageUrl: data.collection_image,
-      startingPrice: data.starting_price,
-      reservePrice: data.reserve_price,
-      minBidIncrement: data.min_bid_increment,
-      startTime: Math.floor(Date.now() / 1000),
-      endTime: Math.floor(data.end_time.getTime() / 1000),
-      durationHours: Math.floor((data.end_time.getTime() - Date.now()) / (1000 * 60 * 60)),
-      allowPublicReveal: data.allow_public_reveal || false,
-      nftMetadata: data.is_collection ? {
-        collectionName: data.collection_name,
-        collectionDescription: data.description,
-        collectionImage: data.collection_image,
-        nftCount: data.collection_token_ids?.length || 0,
-        individualNfts: data.individual_nft_metadata || []
-      } : {
-        name: data.name,
-        description: data.description,
-        image: data.image,
-        attributes: data.attributes,
-        collectionName: data.collection_name
-      },
-      individualNftMetadata: data.individual_nft_metadata || [],
-      creationTxHash: data.tx_hash
+    if (!auctionData.seller) {
+      console.error('❌ sellerAddress is undefined in auctionData')
+      return false
     }
     
-    // ✅ DEBUG: Log the final nftMetadata
-    console.log('🔍 DEBUG final nftMetadata:', {
-      auctionType: apiData.auctionType,
-      nftMetadata: apiData.nftMetadata,
-      individualNftMetadata: apiData.individualNftMetadata
-    })
+    // ✅ Xử lý metadata cho collection auctions
+    let nftMetadata: any = {
+      name: auctionData.name || 'Auction',
+      description: auctionData.description || '',
+      image: auctionData.collection_image || auctionData.individual_nft_metadata?.[0]?.image || '/placeholder-nft.jpg',
+      attributes: auctionData.attributes || []
+    };
     
-    console.log('📊 Syncing auction with transformed data:', {
-      auctionId: apiData.auctionId,
-      auctionType: apiData.auctionType,
-      title: apiData.title,
-      nftCount: apiData.nftCount,
-      tokenIds: apiData.tokenIds?.length || 0
-    })
+    // ✅ Nếu là collection, thêm metadata của tất cả NFTs
+    if (auctionData.is_collection && auctionData.individual_nft_metadata?.length > 0) {
+      nftMetadata = {
+        ...nftMetadata,
+        coverImage: auctionData.collection_image || auctionData.individual_nft_metadata?.[0]?.image,
+        individualNfts: auctionData.individual_nft_metadata.map((nft: any) => ({
+          ...nft,
+          image: nft.image || '/placeholder-nft.jpg'
+        })),
+        totalNfts: auctionData.individual_nft_metadata.length
+      };
+    }
+    
+    // ✅ Lấy duration trực tiếp từ auctionData (giờ)
+    const startTime = Math.floor(Date.now() / 1000)
+    const endTime = Math.floor(new Date(auctionData.end_time).getTime() / 1000)
+    
+    // ✅ Ưu tiên duration từ auctionData, nếu không thì tính từ end_time
+    const durationHours = auctionData.duration || Math.ceil((endTime - startTime) / 3600)
+    
+    const apiData = {
+      action: 'create',
+      auctionId: parseInt(auctionData.auction_id),
+      auctionType: auctionData.is_collection ? 'COLLECTION' : 'SINGLE_NFT',
+      title: auctionData.name || 'Auction',
+      description: auctionData.description || '',
+      sellerAddress: auctionData.seller,
+      nftContract: auctionData.nft_contract,
+      tokenId: auctionData.token_id ? parseInt(auctionData.token_id) : undefined,
+      tokenIds: auctionData.collection_token_ids?.map((id: string) => parseInt(id)),
+      nftCount: auctionData.is_collection ? auctionData.collection_token_ids?.length || 1 : 1,
+      collectionImageUrl: auctionData.collection_image,
+      collectionImageDriveId: '',
+      startingPrice: auctionData.starting_price,
+      reservePrice: auctionData.reserve_price,
+      minBidIncrement: auctionData.min_bid_increment,
+      startTime: startTime,
+      endTime: endTime,
+      durationHours: durationHours, // ✅ Lưu giờ vào database
+      allowPublicReveal: auctionData.allow_public_reveal || false,
+      nftMetadata: nftMetadata,
+      individualNftMetadata: auctionData.individual_nft_metadata || [],
+      creationTxHash: auctionData.tx_hash
+    }
+    
+    console.log('📤 Sending to API:', JSON.stringify(apiData, null, 2))
     
     const response = await fetch('/api/auctions', {
       method: 'POST',
@@ -187,26 +188,26 @@ export async function syncAuctionToDatabase(data: SyncAuctionData): Promise<bool
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error('❌ Failed to sync auction to database:', error)
+      const errorText = await response.text()
+      console.error('❌ API Error:', response.status, errorText)
       return false
     }
 
     const result = await response.json()
-    console.log('✅ Successfully synced auction to database:', result.auction?.auction_id || apiData.auctionId)
+    console.log('✅ Auction synced successfully:', result)
     return true
   } catch (error) {
-    console.error('❌ Error syncing auction to database:', error)
+    console.error('❌ Failed to sync auction to database:', error)
     return false
   }
 }
 
 // Helper function to extract NFT metadata from blockchain or IPFS
 export async function fetchNFTMetadata(nftContract: string, tokenId: string): Promise<{
-  name: string
-  description: string
-  image: string
-  attributes: any[]
+  name: string;
+  description: string;
+  image: string;
+  attributes: any[];
 }> {
   try {
     // This would typically call the blockchain to get tokenURI
@@ -289,13 +290,13 @@ export function prepareListingData(
   }
 }
 
-// Helper function to prepare auction data for database sync
+// ✅ Sửa prepareAuctionData để đảm bảo seller không undefined
 export function prepareAuctionData(
   auctionId: string,
   nftContract: string,
   tokenId: string | null,
   collectionTokenIds: string[] | null,
-  seller: string,
+  seller: string, // ✅ Đảm bảo seller không undefined
   auctionParams: {
     auctionType: 'SINGLE_NFT' | 'COLLECTION'
     title: string
@@ -303,7 +304,7 @@ export function prepareAuctionData(
     startingPrice: string
     reservePrice: string
     minBidIncrement: string
-    durationHours: number
+    duration: number // ✅ Đây là giờ
     allowPublicReveal: boolean
     collectionImage?: string
     collectionImageDriveId?: string
@@ -319,15 +320,13 @@ export function prepareAuctionData(
     collectionName?: string
   }
 ): SyncAuctionData {
-  const endTime = new Date(Date.now() + (auctionParams.durationHours * 60 * 60 * 1000))
+  // ✅ Tính end_time từ duration (giờ)
+  const endTime = new Date(Date.now() + (auctionParams.duration * 60 * 60 * 1000))
   const isCollection = auctionParams.auctionType === 'COLLECTION'
   
-  // ✅ DEBUG: Log individual NFT metadata in prepareAuctionData
-  console.log('🔍 DEBUG prepareAuctionData:', {
-    auctionType: auctionParams.auctionType,
-    individualNftMetadata: auctionParams.individualNftMetadata,
-    individualCount: auctionParams.individualNftMetadata?.length || 0
-  })
+  if (!seller) {
+    throw new Error('seller address is required')
+  }
   
   return {
     auction_id: auctionId,

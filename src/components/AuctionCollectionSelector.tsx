@@ -38,7 +38,7 @@ export interface CollectionAuctionData {
   startingPrice: string
   reservePrice: string
   minBidIncrement: string
-  duration: number // In seconds, not hours
+  duration: number // ✅ In hours, not seconds
   allowPublicReveal: boolean
   title: string
   description: string
@@ -261,7 +261,7 @@ export default function AuctionCollectionSelector({
         startingPrice,
         reservePrice,
         minBidIncrement,
-        duration: duration * 3600, // Convert hours to seconds
+        duration: duration, // ✅ Bỏ * 3600, hook sẽ convert
         allowPublicReveal,
         title,
         description

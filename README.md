@@ -48,3 +48,4 @@ git clone https://github.com/longdevbf/SafirX
 cd SafirX
 npm install
 npm run dev
+.

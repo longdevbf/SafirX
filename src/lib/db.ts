@@ -608,6 +608,47 @@ export const auctionQueries = {
       console.error('Error getting auctions:', error)
       throw error
     }
+  },
+
+  // Update auction state
+  async updateAuctionState(auctionId: string, state: string) {
+    try {
+      const result = await sql`
+        UPDATE auctions 
+        SET state = ${state}, 
+            updated_at = CURRENT_TIMESTAMP
+        WHERE auction_id = ${auctionId}
+        RETURNING *
+      `
+      return result[0] || null
+    } catch (error) {
+      console.error('Error updating auction state:', error)
+      throw error
+    }
+  },
+
+  // Update auction bid
+  async updateAuctionBid(auctionId: string, bidderAddress: string, bidAmount: string) {
+    try {
+      const result = await sql`
+        UPDATE auctions 
+        SET total_bids = total_bids + 1,
+            unique_bidders = CASE 
+              WHEN NOT EXISTS (
+                SELECT 1 FROM auction_bids 
+                WHERE auction_id = ${auctionId} AND bidder_address = ${bidderAddress}
+              ) THEN unique_bidders + 1 
+              ELSE unique_bidders 
+            END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE auction_id = ${auctionId}
+        RETURNING *
+      `
+      return result[0] || null
+    } catch (error) {
+      console.error('Error updating auction bid:', error)
+      throw error
+    }
   }
 }
 

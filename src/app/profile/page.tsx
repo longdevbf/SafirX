@@ -160,8 +160,8 @@ export default function ProfilePage() {
   useEffect(() => {
     if (marketError) {
       handleTransactionError(marketError, "Listing")
-      setIsListingNFT(false)
-      setIsCollectionListing(false)
+        setIsListingNFT(false)
+        setIsCollectionListing(false)
     }
   }, [marketError])
 
@@ -176,7 +176,7 @@ export default function ProfilePage() {
             setProcessedTransactions(prev => new Set([...prev, auctionHash]))
             setLastTransactionHash(auctionHash)
             await handleAuctionSuccess(auctionId)
-          } else {
+              } else {
             console.log('⏳ Transaction not yet confirmed, retrying...')
             // ✅ Retry sau 10 giây nữa
             setTimeout(async () => {
@@ -195,7 +195,7 @@ export default function ProfilePage() {
               }
             }, 10000)
           }
-        } catch (error) {
+            } catch (error) {
           console.error('❌ Error in auction confirmation:', error)
         }
       }, 5000)
@@ -229,7 +229,7 @@ export default function ProfilePage() {
     try {
       const response = await fetch(`/api/users?address=${address}`)
       const userData = response.ok ? await response.json() : defaultUser()
-      setUser(userData)
+        setUser(userData)
     } catch (err) {
       console.error(err)
       setUser(defaultUser())
@@ -239,12 +239,12 @@ export default function ProfilePage() {
   }
 
   const defaultUser = () => ({
-    name: 'User',
-    description: 'Digital art enthusiast and NFT collector',
+        name: 'User',
+        description: 'Digital art enthusiast and NFT collector',
     w_address: address!,
-    m_img: '',
-    b_img: ''
-  })
+        m_img: '',
+        b_img: ''
+      })
 
   const handleSaveSettings = async (updatedUser: UserProfile) => {
     setUser(updatedUser)
@@ -269,8 +269,8 @@ export default function ProfilePage() {
     if (marketplaceApprovalStatus[contractAddress]) return true
     try {
       const response = await fetch('/api/check-approval', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contractAddress, owner: address, marketAddress: '0x329Add063f3fcCb700eAb5525AD3E8127ea050a1' })
       })
       const { isApproved } = await response.json()
@@ -288,7 +288,7 @@ export default function ProfilePage() {
     if (selectedNFT) {
       setMarketplaceApprovalStatus(prev => ({ ...prev, [selectedNFT.contractAddress]: true }))
     }
-    toast({
+        toast({
       title: "✅ Approval Successful!",
       description: (
         <div className="space-y-2">
@@ -312,7 +312,7 @@ export default function ProfilePage() {
     } else if (currentTransactionType === 'collection') {
       await syncCollectionListing()
     }
-    toast({
+      toast({
       title: currentTransactionType === 'collection' ? "🎉 Collection Listed Successfully!" : "🎉 NFT Listed Successfully!",
       description: (
         <div className="space-y-2">
@@ -336,13 +336,13 @@ export default function ProfilePage() {
     if (auctionId) {
       const auctionDataForDb = storedSelectedNFT
         ? prepareAuctionData(
-            auctionId,
+              auctionId,
             storedSelectedNFT.contractAddress,
             storedSelectedNFT.tokenId,
-            null,
+              null,
             address!,
-            {
-              auctionType: 'SINGLE_NFT',
+              {
+                auctionType: 'SINGLE_NFT',
               title: storedAuctionData.title,
               description: storedAuctionData.description,
               startingPrice: storedAuctionData.startingPrice,
@@ -392,31 +392,31 @@ export default function ProfilePage() {
             storedAuctionData
           );
       
-      const success = await syncAuctionToDatabase(auctionDataForDb)
-      toast({
-        title: "🎉 Auction Created Successfully!",
-        description: (
-          <div className="space-y-2">
+            const success = await syncAuctionToDatabase(auctionDataForDb)
+              toast({
+                title: "🎉 Auction Created Successfully!",
+                description: (
+                  <div className="space-y-2">
             <p>Your auction has been created!</p>
-            <div className="text-xs font-mono bg-gray-100 p-2 rounded">
-              Auction ID: {auctionId}
-            </div>
-            <a
-              href={`https://testnet.explorer.sapphire.oasis.dev/tx/${auctionHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline text-xs block"
-            >
-              View on Explorer →
-            </a>
-          </div>
-        ),
+                    <div className="text-xs font-mono bg-gray-100 p-2 rounded">
+                      Auction ID: {auctionId}
+                    </div>
+                    <a
+                      href={`https://testnet.explorer.sapphire.oasis.dev/tx/${auctionHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline text-xs block"
+                    >
+                      View on Explorer →
+                    </a>
+                  </div>
+                ),
         duration: 10000
       })
       if (!success) console.error('❌ Failed to sync auction to database')
     }
     
-    delete (window as any).pendingAuctionData
+          delete (window as any).pendingAuctionData
     delete (window as any).pendingSelectedNFT
     resetAuctionStates()
     setTimeout(() => refetch(), 3000)
@@ -496,11 +496,11 @@ export default function ProfilePage() {
       await createSingleNFTAuction(
         selectedAuctionNFT.contractAddress as `0x${string}`, 
         Number(selectedAuctionNFT.tokenId), 
-        auctionData.startingPrice, 
-        auctionData.reservePrice, 
-        auctionData.minBidIncrement, 
+        auctionData.startingPrice,
+        auctionData.reservePrice,
+        auctionData.minBidIncrement,
         auctionData.duration, // ✅ Truyền giờ, hook sẽ convert sang giây
-        auctionData.title, 
+        auctionData.title,
         auctionData.description
       )
       toast({ title: "⏳ Auction Submitted", description: "Please wait for blockchain confirmation..." })
@@ -516,11 +516,11 @@ export default function ProfilePage() {
       await createCollectionAuction(
         data.nftContract as `0x${string}`, 
         data.tokenIds.map(Number), 
-        data.startingPrice, 
-        data.reservePrice, 
-        data.minBidIncrement, 
+        data.startingPrice,
+        data.reservePrice,
+        data.minBidIncrement,
         data.duration, // ✅ Truyền giờ, hook sẽ convert sang giây
-        data.title, 
+        data.title,
         data.description
       )
       toast({ title: "⏳ Collection Auction Submitted", description: "Please wait for blockchain confirmation..." })
@@ -768,38 +768,38 @@ export default function ProfilePage() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              <Avatar className="w-32 h-32 border-4 border-background shadow-lg">
-                <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+            <Avatar className="w-32 h-32 border-4 border-background shadow-lg">
+              <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
                 <AvatarFallback>{userProfile.name.charAt(0).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h1 className="text-3xl font-bold">{userProfile.name}</h1>
+            </Avatar>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <h1 className="text-3xl font-bold">{userProfile.name}</h1>
                   {userProfile.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800"><Star className="h-3 w-3 mr-1" />Verified</Badge>}
-                </div>
-                <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                  <span>{userProfile.username}</span>
+              </div>
+              <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                <span>{userProfile.username}</span>
                   <Button variant="ghost" size="sm" onClick={copyAddress} className="h-6 w-6 p-0"><Copy className="h-3 w-3" /></Button>
-                </div>
+              </div>
                 <p className="text-muted-foreground mb-4 max-w-2xl">{userProfile.bio}</p>
-                <div className="flex flex-wrap gap-2 mb-4">
+              <div className="flex flex-wrap gap-2 mb-4">
                   <Badge variant="outline" className="text-xs"><Activity className="h-3 w-3 mr-1" />Joined {userProfile.joined}</Badge>
-                </div>
-                <div className="flex flex-wrap gap-4 text-sm">
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm">
                   <div><span className="font-semibold">{userProfile.stats.owned}</span><span className="text-muted-foreground ml-1">Owned</span></div>
                   <div><span className="font-semibold">{userProfile.stats.created}</span><span className="text-muted-foreground ml-1">Created</span></div>
                   <div><span className="font-semibold">{userProfile.stats.sold}</span><span className="text-muted-foreground ml-1">Sold</span></div>
                   <div><span className="font-semibold">{userProfile.stats.totalVolume}</span><span className="text-muted-foreground ml-1">Volume</span></div>
                   <div><span className="font-semibold">{userProfile.stats.floorValue}</span><span className="text-muted-foreground ml-1">Floor Value</span></div>
                 </div>
-              </div>
-              <div className="flex gap-2">
+                </div>
+            <div className="flex gap-2">
                 <Button onClick={() => setShowSettings(true)}><Settings className="h-4 w-4 mr-2" />Edit Profile</Button>
                 <Button variant="outline" onClick={() => setShowCollectionSelector(true)}><Package className="h-4 w-4 mr-2" />List Collection</Button>
                 <Button variant="outline" onClick={() => setShowAuctionCollectionSelector(true)}><Gavel className="h-4 w-4 mr-2" />Auction Collection</Button>
-              </div>
             </div>
+          </div>
           )}
         </div>
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
@@ -816,8 +816,8 @@ export default function ProfilePage() {
               </Button>
               <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-2" />Filter</Button>
               <div className="relative"><Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search NFTs..." className="pl-10 w-64" /></div>
+              </div>
             </div>
-          </div>
           <TabsContent value="owned">
             {loading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -845,7 +845,7 @@ export default function ProfilePage() {
                       <Image src={nft.image || '/placeholder-nft.jpg'} alt={nft.name} fill className="object-cover" />
                       <div className="absolute top-2 left-2">{nft.rarity && <Badge className={getRarityColor(nft.rarity)}>{nft.rarity}</Badge>}</div>
                       <div className="absolute top-2 right-2"><Button variant="ghost" size="sm" className="h-8 w-8 p-0 bg-white/80 hover:bg-white"><Heart className="h-4 w-4" /></Button></div>
-                    </div>
+                      </div>
                     <CardContent className="p-4">
                       <div className="mb-3"><h3 className="font-semibold text-lg mb-1">{nft.name}</h3><p className="text-sm text-muted-foreground">{nft.collectionName}</p></div>
                       {nft.attributes && nft.attributes.length > 0 && (
@@ -873,15 +873,15 @@ export default function ProfilePage() {
                 <div className={`flex items-center gap-2 ${transactionStatus === 'success' ? 'text-green-700' : 'text-blue-700'}`}>
                   {transactionStatus === 'success' ? <CheckCircle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
                   <span className="text-sm font-medium">{transactionStatus === 'success' ? 'Collection listed successfully!' : 'Processing collection transaction...'}</span>
-                </div>
+                  </div>
                 {transactionStatus === 'success' && lastTransactionHash && (
-                  <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-2">
                     <div className="text-xs bg-white p-2 rounded border font-mono">{lastTransactionHash}</div>
                     <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
-                  </div>
-                )}
-              </div>
-            )}
+                    </div>
+                  )}
+                </div>
+              )}
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
               <CollectionSelector nfts={nfts} isLoading={isCollectionListing || isMarketPending || isMarketConfirming} onClose={() => setShowCollectionSelector(false)} onSell={handleListCollection} />
             </div>
@@ -895,17 +895,17 @@ export default function ProfilePage() {
             <Button variant="ghost" size="sm" onClick={() => setShowAuctionCollectionSelector(false)} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
               <AuctionCollectionSelector nfts={nfts} isLoading={isAuctionPending || isAuctionConfirming} onClose={() => setShowAuctionCollectionSelector(false)} onCreateAuction={handleCreateCollectionAuction} />
-            </div>
+                </div>
             {showSuccessNotification && <div className="absolute left-0 right-0 top-0 mx-auto mt-4 w-fit p-3 rounded bg-green-100 text-green-800 text-center font-medium">{successNotificationMessage}</div>}
-          </div>
-        </div>
+                </div>
+              </div>
       )}
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setShowSettings(false)} 
               className="absolute right-4 top-4"
             >

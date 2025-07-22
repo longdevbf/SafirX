@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
@@ -45,10 +46,11 @@ import { useAuctionDatabase, DatabaseAuction } from "@/context/auctionDatabaseCo
 import { toast } from "@/hooks/use-toast";
 import { BidHistoryDialog } from "@/components/BidHistoryDialog";
 import CountdownTimer from "@/components/CountdownTimer";
-import { useSealedBidAuction, ProcessedAuction } from "@/hooks/use-auction";
-import { AuctionType, AuctionState } from "@/abis/AuctionSealedBid";
-import { updateAuctionState as updateAuctionStateDb } from "@/utils/syncAuctionToDatabase";
+import  useSealedBidAuction  from "@/hooks/use-auction";
+import  {ProcessedAuction}  from "@/types/auction";
 import React from "react";
+
+
 
 const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): ProcessedAuction => {
     return {
@@ -57,10 +59,10 @@ const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): Processe
         nftContract: dbAuction.nft_contract,
         tokenId: dbAuction.token_id ? BigInt(dbAuction.token_id) : BigInt(0),
         isCancelled: dbAuction.isCancelled ?? false,
-        auctionType: Number(dbAuction.auction_type ?? 0) as AuctionType,
-        state: Number(dbAuction.state ?? 0) as AuctionState,
-        tokenIds: (dbAuction.token_ids || []).map(id => BigInt(id)),
-        tokenIdsList: (dbAuction.token_ids || []).map(id => BigInt(id)),
+        auctionType: Number(dbAuction.auction_type ?? 0),
+        state: Number(dbAuction.state ?? 0),
+        tokenIds: (dbAuction.token_ids || []).map((id: string | number) => BigInt(id)),
+        tokenIdsList: (dbAuction.token_ids || []).map((id: string | number) => BigInt(id)),
         startingPrice: parseEther(dbAuction.starting_price),
         reservePrice: parseEther(dbAuction.reserve_price),
         minBidIncrement: parseEther(dbAuction.min_bid_increment),
@@ -131,12 +133,14 @@ export default function AuctionsPage() {
     const {groupedAuctions, loading, refetch} = useAuctionDatabase()
     const {address, isConnected} = useWallet()
 
+    // ✅ Sửa import - xóa các function không tồn tại
     const {
         placeBid,
         cancelAuction,
         finalizeAuction,
-        revealMyBid,
-        enablePublicBidHistory,
+        claimNFT,
+        reclaimNFT,
+        useGetAuctionBids,
         hash,
         error,
         isPending,
@@ -144,147 +148,19 @@ export default function AuctionsPage() {
         isConfirmed
     } = useSealedBidAuction()
 
+    // ✅ Thêm lại sau dòng 120 (sau const useSealedBidAuction)
     // ✅ Convert database auctions to processed format
     const processedGroupedAuctions = {
-        active: groupedAuctions
-            .active
-            .map(convertDatabaseToProcessedAuction),
-        ended: groupedAuctions
-            .ended
-            .map(convertDatabaseToProcessedAuction),
-        finalized: groupedAuctions
-            .finalized
-            .map(convertDatabaseToProcessedAuction)
+        active: groupedAuctions.active.map(convertDatabaseToProcessedAuction),
+        ended: groupedAuctions.ended.map(convertDatabaseToProcessedAuction),
+        finalized: groupedAuctions.finalized.map(convertDatabaseToProcessedAuction)
     }
 
-    // ✅ Handle successful transactions
-    useEffect(() => {
-        if (isConfirmed && hash && !processedConfirmTx.current.has(hash)) {
-            processedConfirmTx
-                .current
-                .add(hash)
+    // ✅ Xóa các function không tồn tại
+    // - revealMyBid (không có trong contract)
+    // - enablePublicBidHistory (không có trong contract)
 
-            toast({title: "✅ Transaction Successful", description: "Your transaction has been confirmed on the blockchain."})
-
-            // Refresh auction data once
-            refetch()
-
-            // Reset states
-            setSelectedAuction(null)
-            setBidAmount("")
-            setShowCancelDialog(null)
-            setCancelReason("")
-        }
-    }, [isConfirmed, hash, refetch])
-
-    // ✅ Handle errors
-    useEffect(() => {
-        if (error) {
-            toast({
-                title: "❌ Transaction Failed",
-                description: error.message || "An error occurred during the transaction.",
-                variant: "destructive"
-            })
-        }
-    }, [error])
-
-    // Effect: on transaction confirmation, handle pending cancel sync
-    useEffect(() => {
-        if (isConfirmed && hash && pendingCancelRef.current && pendingCancelRef.current.txHash === hash) {
-            const {auctionId, txHash} = pendingCancelRef.current
-            // Avoid duplicate DB calls
-            if (!processedCancelTx.current.has(txHash)) {
-                processedCancelTx
-                    .current
-                    .add(txHash)
-                updateAuctionStateDb(auctionId, 'CANCELLED', txHash).then(() => {
-                    pendingCancelRef.current = null
-                })
-            }
-        }
-    }, [isConfirmed, hash])
-
-    // ✅ Effect: on transaction confirmation, handle pending bid sync
-    useEffect(() => {
-        // ✅ DEBUG: Log useEffect conditions
-        // ('🔍 useEffect triggered:', {
-        //     isConfirmed,
-        //     hasPendingBid: !!pendingBidRef.current,
-        //     pendingBidData: pendingBidRef.current
-        // })
-
-        // ✅ FIXED: Chỉ cần isConfirmed và pendingBidRef, không cần hash
-        if (!isConfirmed || !pendingBidRef.current) {
-         //   ('❌ useEffect early return:', { isConfirmed, hasPendingBid: !!pendingBidRef.current })
-            return;
-        }
-
-        const {auctionId, bidAmount, bidderAddress, txHash} = pendingBidRef.current
-
-        // ✅ FIXED: Use auctionId instead of txHash for duplicate check
-        if (processedConfirmTx.current.has(auctionId)) {
-         //   ('❌ Auction already processed:', auctionId)
-            return;
-        }
-
-      //  ('✅ Processing confirmed bid transaction:', {auctionId, bidAmount, bidderAddress, txHash})
-
-        // Mark as processed immediately to prevent re-execution
-        processedConfirmTx.current.add(auctionId)
-
-        // Update bid counts in database
-       // ('📤 Calling API to update bid counts:', {auctionId, bidderAddress, bidAmount})
-
-        fetch('/api/auctions/bids', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({auctionId, bidderAddress, bidAmount})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-             //   ('✅ Bid counts updated:', data.data)
-                // Refresh auction data to show updated counts
-                refetch()
-
-                // ✅ Reset dialog state after successful bid
-                setSelectedAuction(null)
-                setBidAmount("")
-                setIsUpdatingBid(false)
-
-                toast({title: "✅ Bid Counts Updated", description: `Total bids: ${data.data.totalBids}, Unique bidders: ${data.data.uniqueBidders}`})
-            } else {
-                console.error('❌ Failed to update bid counts:', data.error)
-                toast({title: "⚠️ Warning", description: "Bid submitted but counts may not be updated immediately.", variant: "destructive"})
-            }
-        })
-        .catch(error => {
-            console.error('❌ Error updating bid counts:', error)
-        })
-        .finally(() => {
-            pendingBidRef.current = null
-        })
-    }, [isConfirmed]) // ✅ Bỏ refetch khỏi dependencies
-
-    // ✅ DEBUG: Monitor pendingBidRef changes
-    useEffect(() => {
-      //  ('🔍 pendingBidRef changed:', pendingBidRef.current)
-    }, [pendingBidRef.current])
-
-    // ✅ DEBUG: Monitor isConfirmed changes  
-    useEffect(() => {
-     //   ('🔍 isConfirmed changed:', isConfirmed)
-    }, [isConfirmed])
-
-    // ✅ Reset processed transactions on component mount
-    useEffect(() => {
-        processedConfirmTx.current.clear()
-    //   ('🔄 Reset processedConfirmTx')
-    }, [])
-
-    // ✅ Handle bid placement
+    // ✅ Sửa handlePlaceBid để đúng với sealed bid logic
     const handlePlaceBid = async() => {
         if (!selectedAuction || !bidAmount || !address) 
             return
@@ -298,36 +174,25 @@ export default function AuctionsPage() {
                 return
             }
 
-            // ('🔍 Placing bid for auction:', {
-            //     auctionId: selectedAuction
-            //         .auctionId
-            //         .toString(),
-            //     bidAmount,
-            //     address
-            // })
-
-            // ✅ FIXED: Use auctionId instead of auction_id
-            const txHash = await placeBid(selectedAuction.auctionId.toString(), bidAmount)
-
-          //  ('✅ Bid transaction hash:', txHash)
+            // ✅ Sealed bid logic: 
+            // - bidAmount = user input (ví dụ 10 ROSE) - bid thực tế
+            // - startingPrice = deposit (ví dụ 5 ROSE) - chỉ trả deposit
+            const txHash = await placeBid(
+                parseInt(selectedAuction.auctionId.toString()), 
+                bidAmount, // ✅ Bid amount thực tế (10 ROSE)
+                formatEther(selectedAuction.startingPrice) // ✅ Deposit = starting price (5 ROSE)
+            )
 
             // ✅ Track pending bid for database update
             pendingBidRef.current = {
-                auctionId: selectedAuction
-                    .auctionId
-                    .toString(),
+                auctionId: selectedAuction.auctionId.toString(),
                 bidAmount,
                 bidderAddress: address,
                 txHash
             }
 
-            // ✅ FIXED: Reset processedConfirmTx for new bid
+            // ✅ Reset processedConfirmTx for new bid
             processedConfirmTx.current.clear()
-            //        console.log('🔄 Reset processedConfirmTx for new bid')
-
-
-
-           
 
             toast({title: "🔒 Sealed Bid Submitted", description: "Your bid has been submitted and will remain hidden until the auction ends."})
 
@@ -337,21 +202,48 @@ export default function AuctionsPage() {
         }
     }
 
-    // ✅ Handle auction cancellation
-    const handleCancelAuction = async(auctionId : string, reason : string) => {
+    // ✅ Sửa handleCancelAuction để chờ confirmation
+    const handleCancelAuction = async(auctionId: string, reason: string) => {
         if (!reason.trim()) {
             toast({title: "❌ Cancellation Failed", description: "Please provide a reason for cancellation.", variant: "destructive"})
             return
         }
 
         try {
-            const txHash = await cancelAuction(auctionId, reason)
+            // ✅ Contract mới chỉ cần auctionId, không cần reason
+            const txHash = await cancelAuction(parseInt(auctionId))
             pendingCancelRef.current = {
                 auctionId,
                 txHash
             }
+            
+            toast({title: "⏳ Cancelling Auction", description: "Transaction submitted. Please wait for confirmation..."})
+            
+            // ✅ Wait for transaction confirmation
+            let confirmed = false
+            const maxAttempts = 30 // 60 seconds max wait
+            let attempts = 0
+            
+            while (!confirmed && attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
+                attempts++
+                
+                // Check if transaction is confirmed
+                if (isConfirmed) {
+                    confirmed = true
+                }
+            }
+
+            if (!confirmed) {
+                toast({
+                    title: "⚠️ Transaction Pending",
+                    description: "Transaction submitted but confirmation is taking longer than expected. Please check your wallet.",
+                })
+            }
+
         } catch (error) {
             console.error("Error canceling auction:", error)
+            toast({title: "❌ Cancellation Failed", description: "Failed to cancel auction. Please try again.", variant: "destructive"})
         }
     }
 
@@ -371,7 +263,7 @@ export default function AuctionsPage() {
             setFinalizingAuctions(prev => new Set(prev).add(auctionId))
 
             // Call smart contract
-            const txHash = await finalizeAuction(auctionId)
+            const txHash = await finalizeAuction(parseInt(auctionId))
             
             toast({
                 title: "⏳ Finalizing Auction",
@@ -409,8 +301,8 @@ export default function AuctionsPage() {
                             body: JSON.stringify({
                                 auctionId: parseInt(auctionId),
                                 txHash,
-                                winnerAddress: auction.highestBidder,
-                                finalPrice: auction.finalPrice?.toString()
+                                winnerAddress: (auction as any).highestBidder,
+                                finalPrice: (auction as any).finalPrice?.toString()
                             })
                         })
                         
@@ -465,31 +357,100 @@ export default function AuctionsPage() {
         }
     }
 
-    // ✅ Handle bid reveal
-    const handleRevealBid = async(auctionId : string) => {
+    // ✅ Xóa handleRevealBid và handleEnablePublicHistory vì không tồn tại trong contract
+
+    // ✅ Thêm handleClaimNFT cho winner
+    const handleClaimNFT = async(auctionId: string, remainingAmount: string) => {
         try {
-            await revealMyBid(auctionId)
+            // ✅ Chỉ truyền auctionId, không cần remainingAmount
+            const txHash = await claimNFT(parseInt(auctionId), remainingAmount)
+            
+            toast({
+                title: "⏳ Claiming NFT",
+                description: "Transaction submitted. Please wait for confirmation...",
+            })
+            
+            // Wait for confirmation
+            let confirmed = false
+            const maxAttempts = 30
+            let attempts = 0
+            
+            while (!confirmed && attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000))
+                attempts++
+                
+                if (isConfirmed) {
+                    confirmed = true
+                }
+            }
+
+            if (confirmed) {
+                toast({
+                    title: "✅ NFT Claimed",
+                    description: "You have successfully claimed your NFT!",
+                })
+
+                refetch()
+            } else {
+                toast({
+                    title: "⚠️ Transaction Pending",
+                    description: "Transaction submitted but confirmation is taking longer than expected.",
+                })
+            }
         } catch (error) {
-            console.error("Error revealing bid:", error)
+            console.error('❌ Error claiming NFT:', error)
+            toast({
+                title: "❌ Claim Failed",
+                description: error instanceof Error ? error.message : "Failed to claim NFT",
+                variant: "destructive"
+            })
         }
     }
 
-    // ✅ Handle public bid history
-    const handleEnablePublicHistory = async(auctionId : string) => {
+    // ✅ Thêm handleReclaimNFT cho seller
+    const handleReclaimNFT = async(auctionId: string) => {
         try {
-            const txHash = await enablePublicBidHistory(auctionId)
-        //    ('✅ Enable public history transaction:', txHash)
+            const txHash = await reclaimNFT(parseInt(auctionId))
             
-            toast({ 
-                title: "🔓 Enabling Public History", 
-                description: "Transaction submitted. Bids will be visible once confirmed." 
+            toast({
+                title: "⏳ Reclaiming NFT",
+                description: "Transaction submitted. Please wait for confirmation...",
             })
+            
+            // Wait for confirmation
+            let confirmed = false
+            const maxAttempts = 30
+            let attempts = 0
+            
+            while (!confirmed && attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000))
+                attempts++
+                
+                if (isConfirmed) {
+                    confirmed = true
+                }
+            }
+
+            if (confirmed) {
+                toast({
+                    title: "✅ NFT Reclaimed",
+                    description: "You have successfully reclaimed your NFT!",
+                })
+                
+                // Refresh auction data
+                refetch()
+            } else {
+                toast({
+                    title: "⚠️ Transaction Pending",
+                    description: "Transaction submitted but confirmation is taking longer than expected.",
+                })
+            }
         } catch (error) {
-            console.error('Error enabling public history:', error)
-            toast({ 
-                title: "❌ Failed", 
-                description: "Failed to enable public history.", 
-                variant: "destructive" 
+            console.error('❌ Error reclaiming NFT:', error)
+            toast({
+                title: "❌ Reclaim Failed",
+                description: error instanceof Error ? error.message : "Failed to reclaim NFT",
+                variant: "destructive"
             })
         }
     }
@@ -1221,33 +1182,60 @@ export default function AuctionsPage() {
                                         if (!open) setShowBidHistory(null)
                                     }}
                                     onTrigger={() => setShowBidHistory(auction.auctionId.toString())}
-                                    onEnablePublicHistory={handleEnablePublicHistory}
+                                    // ✅ Xóa onEnablePublicHistory vì không tồn tại
                                     isPending={isPending}
                                     isConfirming={isConfirming}
                                     userAddress={address}
                                 />
-                                {hasUserBid && !isWinner && (
+                                
+                                {/* ✅ Thêm Claim NFT button cho winner */}
+                                {isWinner && auction.highestBid > 0 && (
                                     <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleRevealBid(auction.auctionId.toString())}
+                                        onClick={() => {
+                                            const remainingAmount = formatEther(auction.highestBid - auction.startingPrice)
+                                            handleClaimNFT(auction.auctionId.toString(), remainingAmount)
+                                        }}
                                         disabled={isPending || isConfirming}
                                         className="w-full">
-                                        {isPending || isConfirming
-                                            ? (
-                                                <>
-                                                    <Loader2 className="w-4 h-4 animate-spin mr-2"/>
-                                                    Revealing...
-                                                </>
-                                            )
-                                            : (
-                                                <>
-                                                    <Eye className="w-4 h-4 mr-2"/>
-                                                    Reveal My Bid
-                                                </>
-                                            )}
+                                        {isPending || isConfirming ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2"/>
+                                                Claiming...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Crown className="w-4 h-4 mr-2"/>
+                                                Claim NFT
+                                            </>
+                                        )}
                                     </Button>
                                 )}
+                                
+                                {/* ✅ Thêm Reclaim NFT button cho seller */}
+                                {isSeller && auction.highestBidder === '0x0000000000000000000000000000000000000000' && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => handleReclaimNFT(auction.auctionId.toString())}
+                                        disabled={isPending || isConfirming}
+                                        className="w-full">
+                                        {isPending || isConfirming ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2"/>
+                                                Reclaiming...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <X className="w-4 h-4 mr-2"/>
+                                                Reclaim NFT
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
+                                
+                                {/* ✅ Xóa các button không tồn tại:
+                                - handleRevealBid
+                                - handleEnablePublicHistory
+                                */}
                             </div>
                         )}
                     </div>
@@ -1256,6 +1244,155 @@ export default function AuctionsPage() {
             </Card>
         )
     }
+
+    // ✅ Thêm useEffect để xử lý cancel confirmation
+    useEffect(() => {
+        if (isConfirmed && hash && pendingCancelRef.current && pendingCancelRef.current.txHash === hash) {
+            const { auctionId, txHash } = pendingCancelRef.current
+            
+            // Avoid duplicate DB calls
+            if (!processedCancelTx.current.has(txHash)) {
+                processedCancelTx.current.add(txHash)
+                
+                // ✅ Sửa updateAuctionStateDb để gọi đúng endpoint
+                const updateAuctionStateDb = async (auctionId: string, state: string, txHash?: string) => {
+                    try {
+                        const response = await fetch('/api/auctions/update-state', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                auctionId,
+                                state,
+                                txHash
+                            })
+                        })
+
+                        if (!response.ok) {
+                            throw new Error(`Failed to update auction state: ${response.status}`)
+                        }
+
+                        const result = await response.json()
+                        console.log('✅ Auction state updated in DB:', result)
+                        return result
+
+                    } catch (error) {
+                        console.error('❌ Failed to update auction state in DB:', error)
+                        throw error
+                    }
+                }
+
+                updateAuctionStateDb(auctionId, 'CANCELLED', txHash).then(() => {
+                    console.log('✅ Auction cancelled in database:', auctionId)
+                    pendingCancelRef.current = null
+                    
+                    // Refresh auction data
+                    refetch()
+                    
+                    toast({
+                        title: "✅ Auction Cancelled",
+                        description: "Auction has been successfully cancelled on blockchain and database.",
+                    })
+                }).catch((error) => {
+                    console.error('❌ Failed to update database for cancelled auction:', error)
+                    toast({
+                        title: "⚠️ Database Update Failed",
+                        description: "Auction cancelled on blockchain but database update failed.",
+                        variant: "destructive"
+                    })
+                })
+            }
+        }
+    }, [isConfirmed, hash, refetch])
+
+    // ✅ Thêm useEffect để xử lý successful transactions
+    useEffect(() => {
+        if (isConfirmed && hash && !processedConfirmTx.current.has(hash)) {
+            processedConfirmTx.current.add(hash)
+
+            // ✅ Check if this is a bid transaction
+            if (pendingBidRef.current && pendingBidRef.current.txHash === hash) {
+                const { auctionId, bidAmount, bidderAddress, txHash } = pendingBidRef.current
+                
+                // ✅ Update database with bid information
+                const updateBidInDatabase = async () => {
+                    try {
+                        console.log('🔄 Updating bid in database:', { auctionId, bidderAddress, bidAmount })
+                        
+                        const response = await fetch('/api/auctions/bids', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                auctionId,
+                                bidderAddress,
+                                bidAmount,
+                                txHash
+                            })
+                        })
+
+                        if (!response.ok) {
+                            const errorText = await response.text()
+                            console.error('❌ Bid update failed:', errorText)
+                            throw new Error(`Failed to update bid: ${response.status}`)
+                        }
+
+                        const result = await response.json()
+                        console.log('✅ Bid updated in database:', result)
+                        
+                        // Refresh auction data
+                        refetch()
+                        
+                        toast({
+                            title: "✅ Bid Confirmed",
+                            description: "Your sealed bid has been confirmed and recorded.",
+                        })
+                    } catch (error) {
+                        console.error('❌ Failed to update bid in database:', error)
+                        toast({
+                            title: "⚠️ Database Update Failed",
+                            description: "Bid confirmed on blockchain but database update failed.",
+                            variant: "destructive"
+                        })
+                    }
+                }
+
+                updateBidInDatabase()
+                pendingBidRef.current = null
+            } else {
+                // ✅ Handle other successful transactions
+                toast({title: "✅ Transaction Successful", description: "Your transaction has been confirmed on the blockchain."})
+
+                // Refresh auction data once
+                refetch()
+
+                // Reset states
+                setSelectedAuction(null)
+                setBidAmount("")
+                setShowCancelDialog(null)
+                setCancelReason("")
+            }
+        }
+    }, [isConfirmed, hash, refetch])
+
+    // ✅ Thêm useEffect để xử lý errors
+    useEffect(() => {
+        if (error) {
+            toast({
+                title: "❌ Transaction Failed",
+                description: error.message || "An error occurred during the transaction.",
+                variant: "destructive"
+            })
+        }
+    }, [error])
+
+    // ✅ Reset processed transactions on component mount
+    useEffect(() => {
+        processedConfirmTx.current.clear()
+        processedCancelTx.current.clear()
+    }, [])
 
     return (
         <div className="min-h-screen bg-background">

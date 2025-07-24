@@ -1,7 +1,7 @@
 
 
 export const SEALED_BID_AUCTION_CONFIG = {
-  address: '0xBC5Feb57F705821E44b07cc305d14940D067a35C' as `0x${string}`, 
+  address: '0xBC5Feb57F705821E44b07cc305d14940D067a35C' as `0x${string}`, //update new address
   abi: [
     {
         "type": "constructor",

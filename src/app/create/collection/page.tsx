@@ -7,8 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-//import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-//import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
 import { 
@@ -76,10 +74,6 @@ export default function MintCollectionPage() {
     if (isConfirmed && hash) {
       setUploadStep('success')
       console.log('✅ NFT Collection Minted Successfully! Transaction hash:', hash)
-      toast({
-        title: "NFT Collection Created Successfully! 🎉",
-        description: `${nftItems.length} NFTs minted. Transaction: ${hash.slice(0, 10)}...${hash.slice(-6)}`,
-      })
     }
   }, [isConfirmed, hash, nftItems.length])
 
@@ -101,7 +95,6 @@ export default function MintCollectionPage() {
     if (files) {
       const filesArray = Array.from(files)
       
-      // Validate total items (max 20 as per contract)
       if (nftItems.length + filesArray.length > 20) {
         toast({
           title: "Too many files",
@@ -112,7 +105,6 @@ export default function MintCollectionPage() {
       }
 
       const newItems: NFTItem[] = filesArray.map((file, index) => {
-        // Validate file size (100MB max)
         if (file.size > 100 * 1024 * 1024) {
           toast({
             title: "File too large",
@@ -144,15 +136,12 @@ export default function MintCollectionPage() {
   const handleCollectionNameChange = (newName: string) => {
     setCollectionName(newName)
     
-    // Auto-update NFT names if they follow the default pattern
     if (newName.trim()) {
       setNftItems(prev => prev.map((item, index) => {
-        // Check if the current name follows the default pattern
         const defaultPattern = /^(.*?) #\d+$/
         const match = item.name.match(defaultPattern)
         
         if (match) {
-          // Update the name with new collection name
           return {
             ...item,
             name: `${newName} #${index + 1}`,
@@ -163,10 +152,10 @@ export default function MintCollectionPage() {
       }))
     }
   }
+
   const removeNftItem = (id: string) => {
     setNftItems(prev => {
       const updated = prev.filter(item => item.id !== id)
-      // Revoke object URL to prevent memory leaks
       const itemToRemove = prev.find(item => item.id === id)
       if (itemToRemove) {
         URL.revokeObjectURL(itemToRemove.preview)
@@ -227,9 +216,9 @@ export default function MintCollectionPage() {
       return (
         <video 
           src={item.preview} 
-          className="w-full h-full object-cover rounded-lg" 
-          controls 
-        />
+          className="w-full h-full object-cover rounded-lg"     
+          controls
+        />  
       )
     }
 
@@ -325,7 +314,6 @@ export default function MintCollectionPage() {
 
       const metadataURIs: string[] = []
 
-      // Upload each NFT item
       for (let i = 0; i < nftItems.length; i++) {
         const item = nftItems[i]
         
@@ -336,9 +324,7 @@ export default function MintCollectionPage() {
           description: item.description,
           externalLink: baseExternalLink ? `${baseExternalLink}/${i + 1}` : undefined,
           properties: [
-            // Item properties
             ...item.properties.filter(p => p.trait_type && p.value),
-            // Collection properties
             {
               trait_type: "Collection",
               value: collectionName
@@ -359,11 +345,9 @@ export default function MintCollectionPage() {
           creatorAddress: address
         }
 
-        // Upload to IPFS and prepare metadata
         const metadataURI = await UploadService.prepareNFTForMinting(item.file, nftParams)
         metadataURIs.push(metadataURI)
         
-        // Update progress
         const progress = ((i + 1) / nftItems.length) * 100
         setUploadProgress(progress)
         
@@ -381,7 +365,6 @@ export default function MintCollectionPage() {
 
       console.log('⛏️ Minting NFT Collection with metadata URIs:', metadataURIs)
       
-      // Mint collection using mintMyCollection function
       await mintCollection(metadataURIs)
 
     } catch (error) {
@@ -397,9 +380,18 @@ export default function MintCollectionPage() {
     }
   }
 
+  // Reset form function
+  const resetForm = () => {
+    setNftItems([])
+    setCollectionName("")
+    setCollectionDescription("")
+    setBaseExternalLink("")
+    setUploadStep('idle')
+    setUploadProgress(0)
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Debug info - development only */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed bottom-4 right-4 bg-black/80 text-white p-2 rounded text-xs max-w-xs z-50">
           <div>Connected: {isConnected ? '✅' : '❌'}</div>
@@ -408,14 +400,21 @@ export default function MintCollectionPage() {
           <div>Pending: {isPending ? '⏳' : '✅'}</div>
           <div>Confirming: {isConfirming ? '⏳' : '✅'}</div>
           <div>Hash: {hash ? `${hash.slice(0, 6)}...` : 'None'}</div>
-          {contractError && <div className="text-red-400">Error: {contractError.message}</div>}
+          {contractError && <div className="text-red-400">Error: {contractError.message }</div>}
         </div>
       )}
       
-      {/* Success Modal */}
       {uploadStep === 'success' && hash && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="max-w-md w-full mx-4">
+          <Card className="max-w-md w-full mx-4 relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2"
+              onClick={resetForm}
+            >
+              <X className="w-4 h-4" />
+            </Button>
             <CardContent className="p-6 text-center">
               <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-8 h-8 text-green-600" />
@@ -433,22 +432,14 @@ export default function MintCollectionPage() {
                   variant="outline" 
                   className="flex-1"
                   onClick={() => {
-                    window.open(`https://explorer.emerald.oasis.dev/tx/${hash}`, "_blank")
+                    window.open(`https://explorer.oasis.io/testnet/sapphire/tx/${hash}`, "_blank")
                   }}
                 >
                   View on Explorer
                 </Button>
                 <Button 
                   className="flex-1"
-                  onClick={() => {
-                    // Reset form
-                    setNftItems([])
-                    setCollectionName("")
-                    setCollectionDescription("")
-                    setBaseExternalLink("")
-                    setUploadStep('idle')
-                    setUploadProgress(0)
-                  }}
+                  onClick={resetForm}
                 >
                   Create Another
                 </Button>
@@ -460,7 +451,6 @@ export default function MintCollectionPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
           <div className="mb-8">
             <div className="flex items-center gap-4 mb-4">
               <Button variant="ghost" size="sm" asChild>
@@ -480,9 +470,7 @@ export default function MintCollectionPage() {
             </div>
           </div>
 
-          {/* Main Content */}
           <div className="grid lg:grid-cols-5 gap-8">
-            {/* Preview Section - Left Side */}
             <div className="lg:col-span-2">
               <Card className="h-fit">
                 <CardHeader>
@@ -504,7 +492,6 @@ export default function MintCollectionPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Collection Info */}
                       <div className="border rounded-lg p-4 bg-background">
                         <h3 className="font-semibold mb-1">
                           {collectionName || "Untitled Collection"}
@@ -527,7 +514,6 @@ export default function MintCollectionPage() {
                         )}
                       </div>
 
-                      {/* Grid Preview */}
                       <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
                         {nftItems.map((item, index) => (
                           <div key={item.id} className="aspect-square relative rounded-lg overflow-hidden bg-muted border">
@@ -546,9 +532,7 @@ export default function MintCollectionPage() {
               </Card>
             </div>
 
-            {/* Form Section - Right Side */}
             <div className="lg:col-span-3 space-y-6">
-              {/* Collection Details */}
               <Card>
                 <CardHeader>
                   <CardTitle>Collection Details</CardTitle>
@@ -597,7 +581,6 @@ export default function MintCollectionPage() {
                 </CardContent>
               </Card>
 
-              {/* File Upload */}
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Files</CardTitle>
@@ -605,7 +588,6 @@ export default function MintCollectionPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {/* Upload Area */}
                     <div>
                       <input
                         type="file"
@@ -637,7 +619,6 @@ export default function MintCollectionPage() {
                       </Button>
                     </div>
 
-                    {/* File List */}
                     {nftItems.length > 0 && (
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {nftItems.map((item, index) => (
@@ -682,7 +663,6 @@ export default function MintCollectionPage() {
                 </CardContent>
               </Card>
 
-              {/* Individual NFT Settings */}
               {nftItems.length > 0 && (
                 <Card>
                   <CardHeader>
@@ -756,7 +736,6 @@ export default function MintCollectionPage() {
                               />
                             </div>
 
-                            {/* Properties */}
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <Label>Properties</Label>
@@ -808,7 +787,6 @@ export default function MintCollectionPage() {
                 </Card>
               )}
 
-              {/* Mint Button */}
               <div className="space-y-4">
                 <div className={`border rounded-lg p-4 ${
                   uploadStep === 'success' ? 'bg-green-50 border-green-200' :
@@ -896,15 +874,7 @@ export default function MintCollectionPage() {
                     <Button variant="outline" className="flex-1" asChild>
                       <Link href="/profile">View in Profile</Link>
                     </Button>
-                    <Button variant="outline" className="flex-1" onClick={() => {
-                      // Reset form
-                      setNftItems([])
-                      setCollectionName("")
-                      setCollectionDescription("")
-                      setBaseExternalLink("")
-                      setUploadStep('idle')
-                      setUploadProgress(0)
-                    }}>
+                    <Button variant="outline" className="flex-1" onClick={resetForm}>
                       Create Another Collection
                     </Button>
                   </div>

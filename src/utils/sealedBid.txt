@@ -273,7 +273,7 @@ contract SealedBidAuction is ReentrancyGuard, Ownable, ERC721Holder {
             IERC721(auction.nftContract).safeTransferFrom(address(this), msg.sender, auction.tokenId);
         } else {
             for (uint256 i = 0; i < auction.tokenIds.length; i++) {
-                IERC721(auction.nftContract).safeTransferFrom(address(this), auction.seller, auction.tokenIds[i]);
+                IERC721(auction.nftContract).safeTransferFrom(address(this), msg.sender, auction.tokenIds[i]);
             }
         }
 

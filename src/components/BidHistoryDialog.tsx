@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { ProcessedAuction, useAuctionDetail } from "@/hooks/use-auction"
+// ✅ Sửa import - xóa useAuctionDetail
+import { ProcessedAuction } from "@/types/auction"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,7 +17,6 @@ import { useEffect, useCallback, useState } from "react"
 import { usePublicClient } from "wagmi"
 import { SEALED_BID_AUCTION_CONFIG } from "@/abis/AuctionSealedBid"
 
-
 import { History, Crown, Eye, Loader2, Lock, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
@@ -27,12 +27,14 @@ interface PublicBid {
   bidNumber: bigint
 }
 
+// ✅ Sửa BidHistoryDialog để thêm nút Claim NFT
 interface BidHistoryDialogProps {
   auction: ProcessedAuction
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   onTrigger: () => void
   onEnablePublicHistory?: (auctionId: string) => void
+  onClaimNFT?: (auctionId: string, remainingAmount: string) => void // ✅ Thêm prop
   isPending?: boolean
   isConfirming?: boolean
   userAddress?: string
@@ -48,28 +50,50 @@ export function BidHistoryDialog({
   onOpenChange, 
   onTrigger,
   onEnablePublicHistory,
+  onClaimNFT, // ✅ Thêm prop
   isPending = false,
   isConfirming = false,
   userAddress
 }: BidHistoryDialogProps) {
   const publicClient = usePublicClient()
   
-  const { 
-    auction: auctionDetail, 
-    publicBids, 
-    loading: loadingBids, 
-    error: bidError,
-    refetchBids 
-  } = useAuctionDetail(auction.auctionId.toString())
-  // ✅ Tạm thời comment tất cả debug logs
-  // console.log(auctionDetail);
+  // ✅ Sửa - xóa useAuctionDetail và tạo state đơn giản
+  const [publicBids, setPublicBids] = useState<PublicBid[]>([])
+  const [loadingBids, setLoadingBids] = useState(false)
+  const [bidError, setBidError] = useState<string | null>(null)
+
+  // ✅ Tạo function để fetch bid history
+  const refetchBids = useCallback(async () => {
+    if (!publicClient || !auction.isFinalized) return
+    
+    try {
+      setLoadingBids(true)
+      setBidError(null)
+      
+      // ✅ Gọi contract để lấy bid history
+      const bids = await publicClient.readContract({
+        address: SEALED_BID_AUCTION_CONFIG.address,
+        abi: SEALED_BID_AUCTION_CONFIG.abi,
+        functionName: 'getAuctionBids',
+        args: [BigInt(auction.auctionId)]
+      })
+      
+      console.log('📊 Bid history from contract:', bids)
+      setPublicBids(bids as PublicBid[])
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch bid history:', error)
+      setBidError(error instanceof Error ? error.message : 'Failed to fetch bid history')
+    } finally {
+      setLoadingBids(false)
+    }
+  }, [publicClient, auction.auctionId, auction.isFinalized])
 
   useEffect(() => {
-    if (isOpen && (auction.isFinalized || (!auction.isActive && auction.state !== 2))) {
-      // console.log(`🔄 Dialog opened for auction ${auction.auctionId}, refreshing bid history...`)
+    if (isOpen && auction.isFinalized) {
       refetchBids()
     }
-  }, [isOpen, auction.isFinalized, auction.isActive, auction.state])
+  }, [isOpen, auction.isFinalized, refetchBids])
 
   // ✅ Helper function to debug auction state
   const debugAuctionState = useCallback(async () => {
@@ -135,6 +159,21 @@ export function BidHistoryDialog({
     }
   }
   
+  // ✅ Thêm function để check winner từ bid history
+  const checkIfUserIsWinner = useCallback(() => {
+    if (!publicBids || publicBids.length === 0 || !userAddress) return false
+    
+    // Sắp xếp theo amount cao nhất
+    const sortedBids = [...publicBids].sort((a, b) => 
+      Number(b.amount) - Number(a.amount)
+    )
+    
+    const highestBid = sortedBids[0]
+    return highestBid.bidder.toLowerCase() === userAddress.toLowerCase()
+  }, [publicBids, userAddress])
+
+  const isUserWinner = checkIfUserIsWinner()
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
@@ -480,6 +519,53 @@ export function BidHistoryDialog({
               )}
             </div>
           )}
+
+          {/* ✅ Thêm Claim NFT button cho winner */}
+          {auction.isFinalized && isUserWinner && onClaimNFT && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-green-600" />
+                  <span className="font-medium text-green-900">🎉 You Won This Auction!</span>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <p className="text-sm text-green-700">
+                  Congratulations! You are the highest bidder. You can now claim your NFT.
+                </p>
+                
+                <Button
+                  onClick={() => {
+                    // Tính remaining amount từ highest bid
+                    const highestBid = publicBids?.sort((a, b) => 
+                      Number(b.amount) - Number(a.amount)
+                    )[0]
+                    
+                    if (highestBid) {
+                      const remainingAmount = formatEther(highestBid.amount - auction.startingPrice)
+                      onClaimNFT(auction.auctionId.toString(), remainingAmount)
+                    }
+                  }}
+                  disabled={isPending || isConfirming}
+                  className="w-full"
+                >
+                  {isPending || isConfirming ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Claiming...
+                    </>
+                  ) : (
+                    <>
+                      <Crown className="w-4 h-4 mr-2" />
+                      Claim NFT
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+          
         </div>
       </DialogContent>
     </Dialog>

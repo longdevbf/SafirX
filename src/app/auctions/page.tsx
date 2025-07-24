@@ -49,7 +49,7 @@ import CountdownTimer from "@/components/CountdownTimer";
 import  useSealedBidAuction  from "@/hooks/use-auction";
 import  {ProcessedAuction}  from "@/types/auction";
 import React from "react";
-
+import Link from "next/link"
 
 
 const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): ProcessedAuction => {
@@ -944,76 +944,78 @@ export default function AuctionsPage() {
         return (
             <Card
                 key={auction.auctionId.toString()}
-                className="overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="aspect-square relative">
-                    <Image
-                        src={auction.nftMetadata?.image || "/placeholder.svg"}
-                        alt={auction.title}
-                        fill
-                        className="object-cover"/>
-                    
-                    {/* Collection indicator */}
-                    {auction.isCollection && (
-                        <div className="absolute top-3 left-3">
-                            <Badge className="bg-purple-100 text-purple-800 flex items-center gap-1">
-                                <Users className="w-3 h-3"/> {auction.nftCount} NFTs
+                className="overflow-hidden hover:shadow-lg transition-shadow"
+            >
+                <Link href={`/auctions/${auction.auctionId.toString()}`} className="block">
+                    <div className="aspect-square relative cursor-pointer">
+                        <Image
+                            src={auction.nftMetadata?.image || "/placeholder.svg"}
+                            alt={auction.title}
+                            fill
+                            className="object-cover"
+                        />
+                        {/* Collection indicator */}
+                        {auction.isCollection && (
+                            <div className="absolute top-3 left-3">
+                                <Badge className="bg-purple-100 text-purple-800 flex items-center gap-1">
+                                    <Users className="w-3 h-3"/> {auction.nftCount} NFTs
+                                </Badge>
+                            </div>
+                        )}
+
+                        {/* Status badges */}
+                        <div className="absolute top-3 right-3 flex flex-col gap-2">
+                            <Badge
+                                className={`flex items-center gap-1 ${type === 'active'
+                                ? 'bg-purple-100 text-purple-800'
+                                : type === 'ended'
+                                    ? 'bg-orange-100 text-orange-800'
+                                    : 'bg-green-100 text-green-800'}`}>
+                                {type === 'active' && (
+                                    <>
+                                        <Lock className="w-3 h-3"/>
+                                        Active
+                                    </>
+                                )}
+                                {type === 'ended' && (
+                                    <>
+                                        <Clock className="w-3 h-3"/>
+                                        Ended
+                                    </>
+                                )}
+                                {type === 'finalized' && (
+                                    <>
+                                        <CheckCircle className="w-3 h-3"/>
+                                        Finalized
+                                    </>
+                                )}
                             </Badge>
+
+                            {isWinner && (
+                                <Badge className="bg-yellow-100 text-yellow-800">
+                                    <Crown className="w-3 h-3 mr-1"/>
+                                    Winner
+                                </Badge>
+                            )}
+
+                            {isSeller && (
+                                <Badge className="bg-blue-100 text-blue-800">
+                                    <Star className="w-3 h-3 mr-1"/>
+                                    Your Auction
+                                </Badge>
+                            )}
                         </div>
-                    )}
 
-                    {/* Status badges */}
-                    <div className="absolute top-3 right-3 flex flex-col gap-2">
-                        <Badge
-                            className={`flex items-center gap-1 ${type === 'active'
-                            ? 'bg-purple-100 text-purple-800'
-                            : type === 'ended'
-                                ? 'bg-orange-100 text-orange-800'
-                                : 'bg-green-100 text-green-800'}`}>
-                            {type === 'active' && (
-                                <>
-                                    <Lock className="w-3 h-3"/>
-                                    Active
-                                </>
-                            )}
-                            {type === 'ended' && (
-                                <>
-                                    <Clock className="w-3 h-3"/>
-                                    Ended
-                                </>
-                            )}
-                            {type === 'finalized' && (
-                                <>
-                                    <CheckCircle className="w-3 h-3"/>
-                                    Finalized
-                                </>
-                            )}
-                        </Badge>
-
-                        {isWinner && (
-                            <Badge className="bg-yellow-100 text-yellow-800">
-                                <Crown className="w-3 h-3 mr-1"/>
-                                Winner
-                            </Badge>
-                        )}
-
-                        {isSeller && (
-                            <Badge className="bg-blue-100 text-blue-800">
-                                <Star className="w-3 h-3 mr-1"/>
-                                Your Auction
-                            </Badge>
-                        )}
+                        {/* Time remaining */}
+                        <div className="absolute bottom-3 left-3">
+                            <CountdownTimer
+                                endTime={new Date(Number(auction.endTime) * 1000).toISOString()}
+                                variant={type === 'active'
+                                ? "destructive"
+                                : "secondary"}/>
+                        </div>
                     </div>
-
-                    {/* Time remaining */}
-                    <div className="absolute bottom-3 left-3">
-                        <CountdownTimer
-                            endTime={new Date(Number(auction.endTime) * 1000).toISOString()}
-                            variant={type === 'active'
-                            ? "destructive"
-                            : "secondary"}/>
-                    </div>
-                </div>
-
+                </Link>
                 <CardContent className="p-4">
                     <div className="mb-3">
                         <h3 className="font-semibold mb-1 truncate">
@@ -1050,6 +1052,7 @@ export default function AuctionsPage() {
                             </div>
                         </div>
                     </div>
+                    </div>  
 
                     {/* Bid stats */}
                     <div className="flex items-center justify-between">
@@ -1182,37 +1185,16 @@ export default function AuctionsPage() {
                                         if (!open) setShowBidHistory(null)
                                     }}
                                     onTrigger={() => setShowBidHistory(auction.auctionId.toString())}
-                                    // ✅ Xóa onEnablePublicHistory vì không tồn tại
+                                    onClaimNFT={handleClaimNFT} // ✅ Thêm prop
                                     isPending={isPending}
                                     isConfirming={isConfirming}
                                     userAddress={address}
                                 />
                                 
-                                {/* ✅ Thêm Claim NFT button cho winner */}
-                                {isWinner && auction.highestBid > 0 && (
-                                    <Button
-                                        onClick={() => {
-                                            const remainingAmount = formatEther(auction.highestBid - auction.startingPrice)
-                                            handleClaimNFT(auction.auctionId.toString(), remainingAmount)
-                                        }}
-                                        disabled={isPending || isConfirming}
-                                        className="w-full">
-                                        {isPending || isConfirming ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 animate-spin mr-2"/>
-                                                Claiming...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Crown className="w-4 h-4 mr-2"/>
-                                                Claim NFT
-                                            </>
-                                        )}
-                                    </Button>
-                                )}
+                                {/* ✅ Xóa nút Claim NFT ở ngoài vì đã có trong dialog */}
                                 
                                 {/* ✅ Thêm Reclaim NFT button cho seller */}
-                                {isSeller && auction.highestBidder === '0x0000000000000000000000000000000000000000' && (
+                                {isSeller && !isWinner && (
                                     <Button
                                         variant="outline"
                                         onClick={() => handleReclaimNFT(auction.auctionId.toString())}
@@ -1239,7 +1221,6 @@ export default function AuctionsPage() {
                             </div>
                         )}
                     </div>
-                </div>
                 </CardContent>
             </Card>
         )

@@ -338,7 +338,7 @@ export default function CreatePage() {
                 className="w-full mb-2"
                 onClick={() => {
                   // Fix: Use correct explorer URL for Oasis Network
-                  window.open(`https://explorer.emerald.oasis.dev/tx/${hash}`, "_blank")
+                  window.open(`https://explorer.oasis.io/testnet/sapphire/tx/${hash}`, "_blank")
                 }}
               >
                 View on Explorer

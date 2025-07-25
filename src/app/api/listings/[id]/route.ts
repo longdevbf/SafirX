@@ -19,6 +19,11 @@ export async function GET(
       return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
     }
 
+    // ✅ Thêm debug logs
+    console.log('🔍 Database listing data:', listing)
+    console.log(' Created at from DB:', listing.created_at)
+    console.log(' Updated at from DB:', listing.updated_at)
+
     return NextResponse.json({ listing })
   } catch (error) {
     console.error('Error fetching listing:', error)

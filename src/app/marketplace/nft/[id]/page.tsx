@@ -68,6 +68,7 @@ export default function NFTDetailPage() {
         const response = await fetch(`/api/listings/${nftId}`)
         if (response.ok) {
           const data = await response.json()
+          console.log('🔍 API response:', data)
           // ✅ Chỉ set detailedNFT nếu context không có data
           if (!nft) {
             setDetailedNFT(data.listing)
@@ -92,6 +93,54 @@ export default function NFTDetailPage() {
 
   // ✅ Ưu tiên context data, fallback về API data
   const displayNFT = nft || detailedNFT
+
+  // ✅ Thêm helper function để map field names
+  const getDisplayData = (nft: any) => {
+    if (!nft) {
+      console.log('❌ No NFT data provided to getDisplayData')
+      return {
+        tokenId: 'Unknown',
+        contractAddress: 'Unknown',
+        seller: 'Unknown',
+        collectionName: 'None',
+        category: 'Uncategorized',
+        rarity: 'Common',
+        price: 'Unknown',
+        views: 0,
+        likes: 0,
+        isActive: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    }
+    
+    console.log('🔍 Raw NFT data:', nft)
+    
+    // Map từ context data (ProcessedNFT) hoặc database data
+    const displayData = {
+      tokenId: nft.tokenId || nft.token_id || 'Unknown',
+      contractAddress: nft.contractAddress || nft.nft_contract || 'Unknown',
+      seller: nft.seller || 'Unknown',
+      collectionName: nft.collectionName || nft.collection_name || 'None',
+      category: nft.category || 'Uncategorized',
+      rarity: nft.rarity || 'Common',
+      price: nft.price || 'Unknown',
+      views: nft.views || nft.views_count || 0,
+      likes: nft.likes || nft.likes_count || 0,
+      isActive: nft.isActive || nft.is_active || false,
+      // ✅ Thêm fallback cho timestamp
+      createdAt: nft.createdAt || nft.created_at || new Date().toISOString(),
+      updatedAt: nft.updatedAt || nft.updated_at || new Date().toISOString()
+    }
+    
+    console.log('✅ Processed display data:', displayData)
+    console.log('📅 Created at:', displayData.createdAt)
+    console.log('📅 Updated at:', displayData.updatedAt)
+    
+    return displayData
+  }
+
+  const displayData = getDisplayData(displayNFT)
 
   // Dialog state
   const openEditDialog = () => {
@@ -127,19 +176,37 @@ export default function NFTDetailPage() {
     }
   }
 
-  // Thêm hàm format date
+  // ✅ Cải thiện formatDate function
   const formatDate = (dateString: string | undefined | null) => {
-    if (!dateString) return "Unknown"
+    console.log('📅 formatDate called with:', dateString)
+    
+    if (!dateString) {
+      console.log('❌ No date string provided')
+      return "Unknown"
+    }
+    
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString('en-US', {
+      console.log('📅 Parsed date:', date)
+      
+      // Kiểm tra nếu date hợp lệ
+      if (isNaN(date.getTime())) {
+        console.log('❌ Invalid date:', dateString)
+        return "Invalid date"
+      }
+      
+      const formatted = date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
       })
+      
+      console.log('✅ Formatted date:', formatted)
+      return formatted
     } catch (error) {
+      console.error('❌ Error formatting date:', error)
       return "Invalid date"
     }
   }
@@ -606,32 +673,32 @@ export default function NFTDetailPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Token ID:</span>
-                <span className="font-medium">{displayNFT?.token_id || 'Unknown'}</span>
+                <span className="font-medium">{displayData.tokenId || 'Unknown'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Contract:</span>
                 <span className="font-medium font-mono text-sm">
-                  {formatAddress(displayNFT?.nft_contract)}
+                  {formatAddress(displayData.contractAddress)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Seller:</span>
                 <span className="font-medium font-mono text-sm">
-                  {formatAddress(displayNFT?.seller)}
+                  {formatAddress(displayData.seller)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Collection:</span>
-                <span className="font-medium">{displayNFT?.collection_name || 'None'}</span>
+                <span className="font-medium">{displayData.collectionName || 'None'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Category:</span>
-                <span className="font-medium">{displayNFT?.category || 'Uncategorized'}</span>
+                <span className="font-medium">{displayData.category || 'Uncategorized'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Rarity:</span>
                 <Badge>
-                  {displayNFT?.rarity || 'Common'}
+                  {displayData.rarity || 'Common'}
                 </Badge>
               </div>
             </CardContent>
@@ -645,33 +712,43 @@ export default function NFTDetailPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Price:</span>
                 <span className="font-medium text-lg">
-                  {displayNFT?.price ? `${parseFloat(displayNFT.price).toFixed(4)} ROSE` : 'Unknown'}
+                  {"price" in displayData && displayData.price !== undefined && displayData.price !== null
+                    ? `${parseFloat(String(displayData.price)).toFixed(4)} ROSE`
+                    : 'Unknown'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Views:</span>
-                <span className="font-medium">{displayNFT?.views_count || 0}</span>
+                <span className="font-medium">
+                  {"views" in displayData && typeof displayData.views === "number"
+                    ? displayData.views
+                    : 0}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Likes:</span>
-                <span className="font-medium">{displayNFT?.likes_count || 0}</span>
+                <span className="font-medium">
+                  {"likes" in displayData && typeof displayData.likes === "number"
+                    ? displayData.likes
+                    : 0}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Status:</span>
-                <Badge variant={displayNFT?.is_active ? "default" : "secondary"}>
-                  {displayNFT?.is_active ? "Active" : "Inactive"}
+                <Badge variant={displayData.isActive ? "default" : "secondary"}>
+                  {displayData.isActive ? "Active" : "Inactive"}
                 </Badge>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created:</span>
                 <span className="font-medium text-sm">
-                  {formatDate(displayNFT?.created_at)}
+                  {formatDate(displayData.createdAt)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Last Updated:</span>
                 <span className="font-medium text-sm">
-                  {formatDate(displayNFT?.updated_at)}
+                  {formatDate(displayData.updatedAt)}
                 </span>
               </div>
             </CardContent>

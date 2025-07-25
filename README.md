@@ -49,7 +49,7 @@ cd SafirX
 npm install
 npm run dev
 .
-
+```
 ----
 
 And you need to create an env file as follows
@@ -62,6 +62,6 @@ PROJECT_ID='Your_Project_ID`
 GOOGLE_DRIVE_CLIENT_EMAIL=`Your_Drivee_Client_Email`
 GOOGLE_DRIVE_PRIVATE_KEY=`Your_Drive_Pivate_Key`
 GOOGLE_DRIVE_FOLDER_ID=`Your_Drive_Folder_Id`
-
+```
 
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {Pool, PoolClient} from 'pg';
 
 const pool = new Pool({

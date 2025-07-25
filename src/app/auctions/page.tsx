@@ -623,10 +623,10 @@ export default function AuctionsPage() {
     }
 
     // ✅ Render bid dialog (for regular bidders)
-    const renderBidDialog = (auction : ProcessedAuction) => {
-        const hasUserBid = Boolean(auction.userBid && auction.userBid.amount > 0)
+    const renderBidDialog = (auction: ProcessedAuction) => {
+        const hasUserBid = Boolean(auction.userBid && BigInt(auction.userBid.amount) > BigInt(0))
         const userBidAmount = hasUserBid
-            ? formatEther(auction.userBid !.amount)
+            ? formatEther(BigInt(auction.userBid!.amount))
             : "0"
 
         return (
@@ -936,7 +936,9 @@ export default function AuctionsPage() {
 
     // ✅ Render auction card
     const renderAuctionCard = (auction: ProcessedAuction, type: 'active' | 'ended' | 'finalized') => {
-        const hasUserBid = Boolean(auction.userBid && auction.userBid.amount > 0)
+        const hasUserBid = Boolean(
+            auction.userBid && Number(auction.userBid.amount) > 0
+        )
         const isWinner = auction.isFinalized && auction.highestBidder
             ?.toLowerCase() === address?.toLowerCase()
         const isSeller = isUserSeller(auction)
@@ -1104,7 +1106,7 @@ export default function AuctionsPage() {
                                     <span className="font-medium text-blue-900">Your Bid</span>
                                 </div>
                                 <div className="font-bold text-blue-900">
-                                    {formatEther(auction.userBid!.amount)} ROSE
+                                    {formatEther(BigInt(auction.userBid!.amount))} ROSE
                                 </div>
                             </div>
                             {isWinner && (

@@ -30,9 +30,9 @@ export interface ProcessedAuction {
     isCollection: boolean;
     userCanBid: boolean;
     userBid?: {
-        [x: string]: number;
-        amount: bigint;
-        timestamp: bigint;
+        [x: string]: string;
+        amount: string;
+        timestamp: string;
     };
     nftMetadata?: {
         name?: string;

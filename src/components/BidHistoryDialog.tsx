@@ -491,7 +491,7 @@ export function BidHistoryDialog({
           )}
           
           {/* User's Bid Information */}
-          {auction.userBid && auction.userBid.amount > 0 && (
+          {auction.userBid && Number(auction.userBid.amount) > 0 && (
             <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex items-center justify-between">
                 <div>
@@ -502,10 +502,10 @@ export function BidHistoryDialog({
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-blue-900 dark:text-blue-100">
-                    {formatEther(auction.userBid.amount)} ROSE
+                    {formatEther(BigInt(auction.userBid.amount))} ROSE
                   </div>
                   <div className="text-sm text-blue-700 dark:text-blue-300">
-                    {auction.userBid.visibility === 1 ? "Revealed" : "Sealed"}
+                    {Number(auction.userBid.visibility) === 1 ? "Revealed" : "Sealed"}
                   </div>
                 </div>
               </div>
@@ -565,9 +565,10 @@ export function BidHistoryDialog({
               </div>
             </div>
           )}
-          
         </div>
       </DialogContent>
     </Dialog>
   )
 }
+
+export default BidHistoryDialog;

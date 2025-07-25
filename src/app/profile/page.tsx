@@ -57,8 +57,16 @@ interface UserProfile {
   b_img?: string
 }
 
-type TransactionStatus = 'idle' | 'pending' | 'confirming' | 'success' | 'error' | 'waiting_approval' | 'approval_success'
-type TransactionType = 'single' | 'collection' | 'approval' | null
+type TransactionStatus = 'idle' | 'pending' | 'confirming' | 'syncing' | 'success' | 'error' | 'waiting_approval' | 'approval_success'
+type TransactionType = 'single' | 'collection' | 'approval' | 'auction_single' | 'auction_collection' | null
+
+interface TransactionState {
+  status: TransactionStatus
+  type: TransactionType
+  txHash: string
+  message: string
+  canClose: boolean
+}
 
 // -----------------
 // Component
@@ -99,12 +107,16 @@ export default function ProfilePage() {
     description: ""
   })
 
-  // Transaction States
+  // Enhanced Transaction States
+  const [transactionState, setTransactionState] = useState<TransactionState>({
+    status: 'idle',
+    type: null,
+    txHash: '',
+    message: '',
+    canClose: true
+  })
   const [isListingNFT, setIsListingNFT] = useState(false)
   const [isCollectionListing, setIsCollectionListing] = useState(false)
-  const [transactionStatus, setTransactionStatus] = useState<TransactionStatus>('idle')
-  const [currentTransactionType, setCurrentTransactionType] = useState<TransactionType>(null)
-  const [lastTransactionHash, setLastTransactionHash] = useState<string>('')
   const [successfulNFTId, setSuccessfulNFTId] = useState<string | null>(null)
   const [processedTransactions, setProcessedTransactions] = useState<Set<string>>(new Set())
   const [marketplaceApprovalStatus, setMarketplaceApprovalStatus] = useState<{ [key: string]: boolean }>({})
@@ -136,71 +148,112 @@ export default function ProfilePage() {
     if (address && isConnected) fetchUserData()
   }, [address, isConnected])
 
-  // Handle market transaction confirmation
+  // Enhanced market transaction handling
   useEffect(() => {
     if (isMarketConfirmed && marketHash && !processedTransactions.has(marketHash)) {
       setProcessedTransactions(prev => new Set([...prev, marketHash]))
-      setLastTransactionHash(marketHash)
-
-      if (currentTransactionType === 'approval') {
-        handleApprovalSuccess()
+      
+      if (transactionState.type === 'approval') {
+        handleApprovalSuccess(marketHash)
       } else {
-        handleListingSuccess()
+        handleListingSuccess(marketHash)
       }
     }
-  }, [isMarketConfirmed, marketHash, currentTransactionType])
+  }, [isMarketConfirmed, marketHash, transactionState.type])
 
-  // Update transaction status based on market state
+  // Enhanced transaction status tracking
   useEffect(() => {
-    if (isMarketPending) setTransactionStatus('pending')
-    else if (isMarketConfirming) setTransactionStatus('confirming')
+    if (isMarketPending) {
+      setTransactionState(prev => ({
+        ...prev,
+        status: 'pending',
+        message: 'Sending transaction to blockchain...',
+        canClose: false
+      }))
+    } else if (isMarketConfirming) {
+      setTransactionState(prev => ({
+        ...prev,
+        status: 'confirming',
+        message: 'Waiting for blockchain confirmation...',
+        canClose: false
+      }))
+    }
   }, [isMarketPending, isMarketConfirming])
 
   // Handle market errors
   useEffect(() => {
     if (marketError) {
       handleTransactionError(marketError, "Listing")
-        setIsListingNFT(false)
-        setIsCollectionListing(false)
+      setIsListingNFT(false)
+      setIsCollectionListing(false)
     }
   }, [marketError])
 
-  // ✅ Sửa useEffect để chờ transaction thực sự confirm
+  // Enhanced auction transaction handling
   useEffect(() => {
     if (isAuctionConfirmed && auctionHash && !processedTransactions.has(auctionHash)) {
-      // ✅ Chờ thêm 5 giây để đảm bảo transaction đã được confirm
+      setProcessedTransactions(prev => new Set([...prev, auctionHash]))
+      setTransactionState(prev => ({
+        ...prev,
+        status: 'syncing',
+        txHash: auctionHash,
+        message: 'Syncing auction data to database...',
+        canClose: false
+      }))
+      
+      // Wait for transaction to be fully confirmed before getting auction ID
       setTimeout(async () => {
         try {
           const auctionId = await getAuctionIdFromTransaction(auctionHash as string);
           if (auctionId) {
-            setProcessedTransactions(prev => new Set([...prev, auctionHash]))
-            setLastTransactionHash(auctionHash)
-            await handleAuctionSuccess(auctionId)
-              } else {
-            console.log('⏳ Transaction not yet confirmed, retrying...')
-            // ✅ Retry sau 10 giây nữa
+            await handleAuctionSuccess(auctionId, auctionHash)
+          } else {
+            // Retry after 10 seconds
             setTimeout(async () => {
               const retryAuctionId = await getAuctionIdFromTransaction(auctionHash as string);
               if (retryAuctionId) {
-                setProcessedTransactions(prev => new Set([...prev, auctionHash]))
-                setLastTransactionHash(auctionHash)
-                await handleAuctionSuccess(retryAuctionId)
+                await handleAuctionSuccess(retryAuctionId, auctionHash)
               } else {
-                console.error('❌ Failed to get auction ID after retry')
-                toast({
-                  title: "⚠️ Warning",
-                  description: "Auction created but still processing. Please check manually in a few minutes.",
-                  variant: "destructive"
-                })
+                setTransactionState(prev => ({
+                  ...prev,
+                  status: 'error',
+                  message: 'Failed to get auction ID. Please check manually.',
+                  canClose: true
+                }))
               }
             }, 10000)
           }
-            } catch (error) {
+        } catch (error) {
           console.error('❌ Error in auction confirmation:', error)
+          setTransactionState(prev => ({
+            ...prev,
+            status: 'error',
+            message: 'Error processing auction. Please try again.',
+            canClose: true
+          }))
         }
       }, 5000)
     }
   }, [isAuctionConfirmed, auctionHash])
+
+  // Enhanced auction status tracking
+  useEffect(() => {
+    if (isAuctionPending) {
+      setTransactionState(prev => ({
+        ...prev,
+        status: 'pending',
+        message: 'Sending auction transaction to blockchain...',
+        canClose: false
+      }))
+    } else if (isAuctionConfirming) {
+      setTransactionState(prev => ({
+        ...prev,
+        status: 'confirming',
+        message: 'Waiting for auction confirmation...',
+        canClose: false
+      }))
+    }
+  }, [isAuctionPending, isAuctionConfirming])
 
   // Handle auction approval confirmation
   useEffect(() => {
@@ -229,7 +282,7 @@ export default function ProfilePage() {
     try {
       const response = await fetch(`/api/users?address=${address}`)
       const userData = response.ok ? await response.json() : defaultUser()
-        setUser(userData)
+      setUser(userData)
     } catch (err) {
       console.error(err)
       setUser(defaultUser())
@@ -239,12 +292,12 @@ export default function ProfilePage() {
   }
 
   const defaultUser = () => ({
-        name: 'User',
-        description: 'Digital art enthusiast and NFT collector',
+    name: 'User',
+    description: 'Digital art enthusiast and NFT collector',
     w_address: address!,
-        m_img: '',
-        b_img: ''
-      })
+    m_img: '',
+    b_img: ''
+  })
 
   const handleSaveSettings = async (updatedUser: UserProfile) => {
     setUser(updatedUser)
@@ -265,12 +318,19 @@ export default function ProfilePage() {
     }
   }
 
+  const copyTxHash = () => {
+    if (transactionState.txHash) {
+      navigator.clipboard.writeText(transactionState.txHash)
+      toast({ title: "Transaction Hash Copied", description: "Transaction hash copied to clipboard" })
+    }
+  }
+
   const checkCollectionApproval = async (contractAddress: string): Promise<boolean> => {
     if (marketplaceApprovalStatus[contractAddress]) return true
     try {
       const response = await fetch('/api/check-approval', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contractAddress, owner: address, marketAddress: '0x329Add063f3fcCb700eAb5525AD3E8127ea050a1' })
       })
       const { isApproved } = await response.json()
@@ -282,18 +342,26 @@ export default function ProfilePage() {
     }
   }
 
-  // Transaction Handlers
-  const handleApprovalSuccess = () => {
-    setTransactionStatus('approval_success')
+  // Enhanced Transaction Handlers
+  const handleApprovalSuccess = (txHash: string) => {
+    setTransactionState({
+      status: 'success',
+      type: 'approval',
+      txHash,
+      message: 'NFT collection approved for marketplace successfully!',
+      canClose: true
+    })
+    
     if (selectedNFT) {
       setMarketplaceApprovalStatus(prev => ({ ...prev, [selectedNFT.contractAddress]: true }))
     }
-        toast({
+    
+    toast({
       title: "✅ Approval Successful!",
       description: (
         <div className="space-y-2">
           <p>Your NFT collection has been approved for the marketplace!</p>
-          <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${marketHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs block">
+          <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs block">
             View on Explorer →
           </a>
         </div>
@@ -303,46 +371,84 @@ export default function ProfilePage() {
     resetTransactionStates(false)
   }
 
-  const handleListingSuccess = async () => {
-    setTransactionStatus('success')
-    if (currentTransactionType === 'single' && selectedNFT) {
-      const nftId = `${selectedNFT.contractAddress}-${selectedNFT.tokenId}`
-      setSuccessfulNFTId(nftId)
-      await syncSingleNFTListing()
-    } else if (currentTransactionType === 'collection') {
-      await syncCollectionListing()
+  const handleListingSuccess = async (txHash: string) => {
+    setTransactionState(prev => ({
+      ...prev,
+      status: 'syncing',
+      txHash,
+      message: 'Syncing listing data to database...',
+      canClose: false
+    }))
+
+    try {
+      let syncSuccess = false
+      
+      if (transactionState.type === 'single' && selectedNFT) {
+        const nftId = `${selectedNFT.contractAddress}-${selectedNFT.tokenId}`
+        setSuccessfulNFTId(nftId)
+        syncSuccess = await syncSingleNFTListing(txHash)
+      } else if (transactionState.type === 'collection') {
+        syncSuccess = await syncCollectionListing(txHash)
+      }
+
+      if (syncSuccess) {
+        setTransactionState({
+          status: 'success',
+          type: transactionState.type,
+          txHash,
+          message: transactionState.type === 'collection' ? 'Collection listed and synced successfully!' : 'NFT listed and synced successfully!',
+          canClose: true
+        })
+        
+        toast({
+          title: transactionState.type === 'collection' ? "🎉 Collection Listed Successfully!" : "🎉 NFT Listed Successfully!",
+          description: (
+            <div className="space-y-2">
+              <p>{transactionState.type === 'collection' ? "Your collection has been listed and synced!" : "Your NFT has been listed and synced!"}</p>
+              <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs block">
+                View on Explorer →
+              </a>
+            </div>
+          ),
+          duration: 15000
+        })
+        
+        setTimeout(() => refetch(), 3000)
+      } else {
+        setTransactionState({
+          status: 'error',
+          type: transactionState.type,
+          txHash,
+          message: 'Transaction confirmed but database sync failed. Please check manually.',
+          canClose: true
+        })
+      }
+    } catch (error) {
+      console.error('Error during listing sync:', error)
+      setTransactionState({
+        status: 'error',
+        type: transactionState.type,
+        txHash,
+        message: 'Error syncing to database. Please try again.',
+        canClose: true
+      })
     }
-      toast({
-      title: currentTransactionType === 'collection' ? "🎉 Collection Listed Successfully!" : "🎉 NFT Listed Successfully!",
-      description: (
-        <div className="space-y-2">
-          <p>{currentTransactionType === 'collection' ? "Your collection has been listed!" : "Your NFT has been listed!"}</p>
-          <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${marketHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs block">
-            View on Explorer →
-          </a>
-        </div>
-      ),
-      duration: 15000
-    })
-    resetTransactionStates(true)
-    setTimeout(() => refetch(), 3000)
   }
 
-  // ✅ Sửa handleAuctionSuccess để lấy image thực tế của NFTs
-  const handleAuctionSuccess = async (auctionId: string) => {
+  const handleAuctionSuccess = async (auctionId: string, txHash: string) => {
     const storedAuctionData = (window as any).pendingAuctionData;
     const storedSelectedNFT = (window as any).pendingSelectedNFT;
     
-    if (auctionId) {
+    try {
       const auctionDataForDb = storedSelectedNFT
         ? prepareAuctionData(
-              auctionId,
+            auctionId,
             storedSelectedNFT.contractAddress,
             storedSelectedNFT.tokenId,
-              null,
+            null,
             address!,
-              {
-                auctionType: 'SINGLE_NFT',
+            {
+              auctionType: 'SINGLE_NFT',
               title: storedAuctionData.title,
               description: storedAuctionData.description,
               startingPrice: storedAuctionData.startingPrice,
@@ -352,7 +458,7 @@ export default function ProfilePage() {
               allowPublicReveal: false,
               collectionImage: storedSelectedNFT.image
             },
-            auctionHash as string,
+            txHash,
             storedSelectedNFT
           )
         : prepareAuctionData(
@@ -371,7 +477,6 @@ export default function ProfilePage() {
               duration: storedAuctionData.duration,
               allowPublicReveal: false,
               collectionImage: storedAuctionData.collectionImage,
-              // ✅ Lưu metadata của tất cả NFTs trong collection với image thực tế
               individualNftMetadata: storedAuctionData.tokenIds.map((tokenId: string) => {
                 const nft = nfts.find(n => 
                   n.contractAddress === storedAuctionData.nftContract && 
@@ -381,51 +486,84 @@ export default function ProfilePage() {
                   tokenId: parseInt(tokenId),
                   name: nft?.name || `NFT #${tokenId}`,
                   description: nft?.description || '',
-                  image: nft?.image || '/placeholder-nft.jpg', // ✅ Lấy image thực tế từ NFT
+                  image: nft?.image || '/placeholder-nft.jpg',
                   attributes: nft?.attributes || [],
                   rarity: nft?.rarity || 'Common',
                   collectionName: nft?.collectionName || storedAuctionData.title
                 };
               })
             },
-            auctionHash as string,
+            txHash,
             storedAuctionData
           );
       
-            const success = await syncAuctionToDatabase(auctionDataForDb)
-              toast({
-                title: "🎉 Auction Created Successfully!",
-                description: (
-                  <div className="space-y-2">
-            <p>Your auction has been created!</p>
-                    <div className="text-xs font-mono bg-gray-100 p-2 rounded">
-                      Auction ID: {auctionId}
-                    </div>
-                    <a
-                      href={`https://testnet.explorer.sapphire.oasis.dev/tx/${auctionHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 hover:underline text-xs block"
-                    >
-                      View on Explorer →
-                    </a>
-                  </div>
-                ),
-        duration: 10000
+      const success = await syncAuctionToDatabase(auctionDataForDb)
+      
+      if (success) {
+        setTransactionState({
+          status: 'success',
+          type: storedSelectedNFT ? 'auction_single' : 'auction_collection',
+          txHash,
+          message: `Auction created and synced successfully! Auction ID: ${auctionId}`,
+          canClose: true
+        })
+        
+        toast({
+          title: "🎉 Auction Created Successfully!",
+          description: (
+            <div className="space-y-2">
+              <p>Your auction has been created and synced!</p>
+              <div className="text-xs font-mono bg-gray-100 p-2 rounded">
+                Auction ID: {auctionId}
+              </div>
+              <a
+                href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline text-xs block"
+              >
+                View on Explorer →
+              </a>
+            </div>
+          ),
+          duration: 10000
+        })
+      } else {
+        setTransactionState({
+          status: 'error',
+          type: storedSelectedNFT ? 'auction_single' : 'auction_collection',
+          txHash,
+          message: 'Auction created but database sync failed. Please check manually.',
+          canClose: true
+        })
+      }
+    } catch (error) {
+      console.error('Error during auction sync:', error)
+      setTransactionState({
+        status: 'error',
+        type: storedSelectedNFT ? 'auction_single' : 'auction_collection',
+        txHash,
+        message: 'Error syncing auction to database. Please try again.',
+        canClose: true
       })
-      if (!success) console.error('❌ Failed to sync auction to database')
     }
     
-          delete (window as any).pendingAuctionData
+    delete (window as any).pendingAuctionData
     delete (window as any).pendingSelectedNFT
     resetAuctionStates()
     setTimeout(() => refetch(), 3000)
   }
 
   const handleTransactionError = (err: any, type: string) => {
-    setTransactionStatus('error')
-    const message = err.message || `${type} failed. Please try again.`
-    toast({ title: `❌ ${type} Failed`, description: message, variant: "destructive" })
+    setTransactionState({
+      status: 'error',
+      type: transactionState.type,
+      txHash: '',
+      message: err.message || `${type} failed. Please try again.`,
+      canClose: true
+    })
+    
+    toast({ title: `❌ ${type} Failed`, description: err.message || `${type} failed. Please try again.`, variant: "destructive" })
     resetTransactionStates(false)
   }
 
@@ -436,8 +574,13 @@ export default function ProfilePage() {
       return
     }
     setIsListingNFT(true)
-    setTransactionStatus('idle')
-    setCurrentTransactionType('single')
+    setTransactionState({
+      status: 'idle',
+      type: 'single',
+      txHash: '',
+      message: '',
+      canClose: false
+    })
     try {
       const isApproved = await checkCollectionApproval(selectedNFT.contractAddress)
       if (!isApproved) {
@@ -454,8 +597,13 @@ export default function ProfilePage() {
 
   const handleListCollection = async (data: CollectionSellData) => {
     setIsCollectionListing(true)
-    setTransactionStatus('idle')
-    setCurrentTransactionType('collection')
+    setTransactionState({
+      status: 'idle',
+      type: 'collection',
+      txHash: '',
+      message: '',
+      canClose: false
+    })
     try {
       const isApproved = await checkCollectionApproval(data.nftContract)
       if (!isApproved) {
@@ -474,12 +622,14 @@ export default function ProfilePage() {
   }
 
   const requestApproval = async (contractAddress: string) => {
-    setCurrentTransactionType('approval')
+    setTransactionState(prev => ({
+      ...prev,
+      type: 'approval'
+    }))
     await approveNFT(contractAddress)
     toast({ title: "✅ Approval Sent", description: "Please confirm the approval transaction.", duration: 8000 })
     setIsListingNFT(false)
     setIsCollectionListing(false)
-    setTransactionStatus('waiting_approval')
   }
 
   // Auction Functions
@@ -533,7 +683,16 @@ export default function ProfilePage() {
   const resetTransactionStates = (closeDialog: boolean) => {
     setIsListingNFT(false)
     setIsCollectionListing(false)
-    setCurrentTransactionType(null)
+    if (!transactionState.canClose) return // Don't reset if transaction is still processing
+    
+    setTransactionState({
+      status: 'idle',
+      type: null,
+      txHash: '',
+      message: '',
+      canClose: true
+    })
+    
     if (closeDialog) {
       setSelectedNFT(null)
       setSellPrice("")
@@ -555,10 +714,10 @@ export default function ProfilePage() {
   }
 
   // Sync Functions
-  const syncSingleNFTListing = async () => {
-    const { listingId } = await getListingIdFromTransaction(marketHash as string) || await getLatestListingIdForUser(address || '') || { listingId: null }
+  const syncSingleNFTListing = async (txHash: string) => {
+    const { listingId } = await getListingIdFromTransaction(txHash) || await getLatestListingIdForUser(address || '') || { listingId: null }
     if (listingId && selectedNFT) {
-      const listingData = prepareListingData(listingId, selectedNFT.contractAddress, selectedNFT.tokenId, address || '', sellPrice, marketHash as string, {
+      const listingData = prepareListingData(listingId, selectedNFT.contractAddress, selectedNFT.tokenId, address || '', sellPrice, txHash, {
         name: selectedNFT.name,
         description: sellDescription,
         category: sellCategory,
@@ -568,13 +727,15 @@ export default function ProfilePage() {
         collectionName: selectedNFT.collectionName
       })
       await syncListingToDatabase(listingData)
+      return true
     }
+    return false
   }
 
-  const syncCollectionListing = async () => {
+  const syncCollectionListing = async (txHash: string) => {
     const collectionData = (window as any).pendingCollectionData as CollectionSellData
-    if (!collectionData) return
-    const { collectionId } = await getListingIdFromTransaction(marketHash as string)
+    if (!collectionData) return false
+    const { collectionId } = await getListingIdFromTransaction(txHash)
     if (collectionId) {
       const nftDetails = collectionData.tokenIds.map((tokenId, index) => {
         const nft = nfts.find(n => n.contractAddress === collectionData.nftContract && n.tokenId === tokenId)
@@ -601,20 +762,21 @@ export default function ProfilePage() {
         is_bundle: collectionData.listingType === 'bundle',
         bundle_price: collectionData.bundlePrice ? parseFloat(collectionData.bundlePrice) : null,
         listing_type: collectionData.listingType === 'bundle' ? 1 : collectionData.listingType === 'same-price' ? 2 : 0,
-        tx_hash: marketHash,
+        tx_hash: txHash,
         total_items: collectionData.tokenIds.length,
         items: nftDetails
       }
       await fetch('/api/collections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      return true
     }
-    delete (window as any).pendingCollectionData
+    return false
   }
 
   const renderSellDialog = (nft: ProcessedNFT) => {
     const isCurrentNFTLoading = selectedNFT?.id === nft.id && (isListingNFT || isMarketPending || isMarketConfirming)
     const isCurrentNFTSelected = selectedNFT?.id === nft.id
     const currentNFTId = `${nft.contractAddress}-${nft.tokenId}`
-    const isThisNFTSuccessful = successfulNFTId === currentNFTId && transactionStatus === 'success'
+    const isThisNFTSuccessful = successfulNFTId === currentNFTId && transactionState.status === 'success'
 
     return (
       <Dialog open={isCurrentNFTSelected}>
@@ -663,29 +825,45 @@ export default function ProfilePage() {
                   </SelectContent>
                 </Select>
               </div>
-              {transactionStatus !== 'idle' && selectedNFT?.id === nft.id && (
-                <div className={`p-3 rounded-lg border ${isThisNFTSuccessful ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-                  <div className={`flex items-center gap-2 ${isThisNFTSuccessful ? 'text-green-700' : 'text-blue-700'}`}>
-                    {isThisNFTSuccessful ? <CheckCircle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span className="text-sm font-medium">
-                      {transactionStatus === 'pending' ? 'Waiting for confirmation...' : transactionStatus === 'confirming' ? 'Confirming on blockchain...' : 'NFT listed successfully!'}
-                    </span>
-                  </div>
-                  {isThisNFTSuccessful && lastTransactionHash && (
-                    <div className="mt-3 space-y-2">
-                      <div className="text-xs bg-white p-2 rounded border font-mono">{lastTransactionHash}</div>
-                      <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
+                              {transactionState.status !== 'idle' && selectedNFT?.id === nft.id && (
+                  <div className={`p-3 rounded-lg border ${isThisNFTSuccessful ? 'bg-green-50 border-green-200' : transactionState.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+                    <div className={`flex items-center gap-2 ${isThisNFTSuccessful ? 'text-green-700' : transactionState.status === 'error' ? 'text-red-700' : 'text-blue-700'}`}>
+                      {isThisNFTSuccessful ? (
+                        <CheckCircle className="h-4 w-4" />
+                      ) : transactionState.status === 'error' ? (
+                        <AlertCircle className="h-4 w-4" />
+                      ) : (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      )}
+                      <span className="text-sm font-medium">
+                        {transactionState.message || 'Processing transaction...'}
+                      </span>
                     </div>
-                  )}
-                </div>
-              )}
+                    {(isThisNFTSuccessful || transactionState.status === 'error') && transactionState.txHash && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs bg-white p-2 rounded border font-mono flex-1">{transactionState.txHash}</div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={copyTxHash}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${transactionState.txHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
           </div>
           <div className="flex gap-2 mt-4 pt-4 border-t flex-shrink-0">
-            <Button onClick={handleListSingleNFT} disabled={isCurrentNFTLoading || !sellPrice || parseFloat(sellPrice) <= 0 || isThisNFTSuccessful} className="flex-1">
-              {isCurrentNFTLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Processing...</> : isThisNFTSuccessful ? 'Listed Successfully!' : 'List for Sale'}
+            <Button onClick={handleListSingleNFT} disabled={isCurrentNFTLoading || !sellPrice || parseFloat(sellPrice) <= 0 || isThisNFTSuccessful || !transactionState.canClose} className="flex-1">
+              {isCurrentNFTLoading || !transactionState.canClose ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Processing...</> : isThisNFTSuccessful ? 'Listed Successfully!' : 'List for Sale'}
             </Button>
-            <Button variant="outline" onClick={() => resetTransactionStates(true)} className="flex-1">{isThisNFTSuccessful ? 'Close' : 'Cancel'}</Button>
+            <Button variant="outline" onClick={() => resetTransactionStates(true)} disabled={!transactionState.canClose} className="flex-1">{isThisNFTSuccessful ? 'Close' : 'Cancel'}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -695,7 +873,40 @@ export default function ProfilePage() {
   const renderAuctionDialog = () => selectedAuctionNFT && (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-hidden relative flex flex-col">
-        <Button variant="ghost" size="sm" onClick={() => setShowAuctionDialog(false)} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="sm" onClick={() => setShowAuctionDialog(false)} disabled={!transactionState.canClose} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
+        
+        {/* Enhanced Transaction Status for Auctions */}
+        {transactionState.status !== 'idle' && (transactionState.type === 'auction_single' || (transactionState.type === null && (isAuctionPending || isAuctionConfirming))) && (
+          <div className={`m-4 p-3 rounded-lg border ${transactionState.status === 'success' ? 'bg-green-50 border-green-200' : transactionState.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+            <div className={`flex items-center gap-2 ${transactionState.status === 'success' ? 'text-green-700' : transactionState.status === 'error' ? 'text-red-700' : 'text-blue-700'}`}>
+              {transactionState.status === 'success' ? (
+                <CheckCircle className="h-4 w-4" />
+              ) : transactionState.status === 'error' ? (
+                <AlertCircle className="h-4 w-4" />
+              ) : (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              <span className="text-sm font-medium">{transactionState.message || 'Processing auction transaction...'}</span>
+            </div>
+            {(transactionState.status === 'success' || transactionState.status === 'error') && transactionState.txHash && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="text-xs bg-white p-2 rounded border font-mono flex-1">{transactionState.txHash}</div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={copyTxHash}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+                <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${transactionState.txHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
+              </div>
+            )}
+          </div>
+        )}
+        
         <div className="p-6 space-y-4 overflow-y-auto">
           <h2 className="text-xl font-bold mb-2 flex items-center gap-2"><Gavel className="h-5 w-5" />Create Auction for {selectedAuctionNFT.name}</h2>
           <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
@@ -708,23 +919,29 @@ export default function ProfilePage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><Label>Starting Price (ROSE)</Label><Input type="number" step="0.01" value={auctionData.startingPrice} onChange={e => setAuctionData(d => ({ ...d, startingPrice: e.target.value }))} placeholder="0.00" /></div>
-            <div><Label>Reserve Price (ROSE)</Label><Input type="number" step="0.01" value={auctionData.reservePrice} onChange={e => setAuctionData(d => ({ ...d, reservePrice: e.target.value }))} placeholder="0.00" /></div>
+            <div><Label>Starting Price (ROSE)</Label><Input type="number" step="0.01" value={auctionData.startingPrice} onChange={e => setAuctionData(d => ({ ...d, startingPrice: e.target.value }))} placeholder="0.00" disabled={!transactionState.canClose} /></div>
+            <div><Label>Reserve Price (ROSE)</Label><Input type="number" step="0.01" value={auctionData.reservePrice} onChange={e => setAuctionData(d => ({ ...d, reservePrice: e.target.value }))} placeholder="0.00" disabled={!transactionState.canClose} /></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><Label>Min Bid Increment (ROSE)</Label><Input type="number" step="0.01" value={auctionData.minBidIncrement} onChange={e => setAuctionData(d => ({ ...d, minBidIncrement: e.target.value }))} placeholder="0.1" /></div>
-            <div><Label>Duration (hours)</Label><Input type="number" min="1" max="720" value={auctionData.duration} onChange={e => setAuctionData(d => ({ ...d, duration: Number(e.target.value) }))} placeholder="24" /></div>
+            <div><Label>Min Bid Increment (ROSE)</Label><Input type="number" step="0.01" value={auctionData.minBidIncrement} onChange={e => setAuctionData(d => ({ ...d, minBidIncrement: e.target.value }))} placeholder="0.1" disabled={!transactionState.canClose} /></div>
+            <div><Label>Duration (hours)</Label><Input type="number" min="1" max="720" value={auctionData.duration} onChange={e => setAuctionData(d => ({ ...d, duration: Number(e.target.value) }))} placeholder="24" disabled={!transactionState.canClose} /></div>
           </div>
-          <div><Label>Auction Title</Label><Input value={auctionData.title} onChange={e => setAuctionData(d => ({ ...d, title: e.target.value }))} placeholder="Auction title" /></div>
-          <div><Label>Description</Label><textarea value={auctionData.description} onChange={e => setAuctionData(d => ({ ...d, description: e.target.value }))} className="w-full p-2 border rounded-md" rows={2} placeholder="Describe your auction..." /></div>
+          <div><Label>Auction Title</Label><Input value={auctionData.title} onChange={e => setAuctionData(d => ({ ...d, title: e.target.value }))} placeholder="Auction title" disabled={!transactionState.canClose} /></div>
+          <div><Label>Description</Label><textarea value={auctionData.description} onChange={e => setAuctionData(d => ({ ...d, description: e.target.value }))} className="w-full p-2 border rounded-md" rows={2} placeholder="Describe your auction..." disabled={!transactionState.canClose} /></div>
           <div className="flex flex-col gap-2 mt-4">
             {!isAuctionApproved ? (
-              <Button onClick={approveForAuction} disabled={isApprovalPending || isApprovalConfirming} className="bg-blue-600 text-white hover:bg-blue-700">
+              <Button onClick={approveForAuction} disabled={isApprovalPending || isApprovalConfirming || !transactionState.canClose} className="bg-blue-600 text-white hover:bg-blue-700">
                 {isApprovalPending || isApprovalConfirming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Approve for Auction
               </Button>
             ) : (
-              <Button onClick={handleCreateSingleAuction} disabled={isAuctionPending || isAuctionConfirming || !auctionData.startingPrice || !auctionData.reservePrice || !auctionData.title} className="bg-green-600 text-white hover:bg-green-700">
-                {isAuctionPending || isAuctionConfirming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Create Auction
+              <Button onClick={handleCreateSingleAuction} disabled={isAuctionPending || isAuctionConfirming || !auctionData.startingPrice || !auctionData.reservePrice || !auctionData.title || !transactionState.canClose} className="bg-green-600 text-white hover:bg-green-700">
+                {isAuctionPending || isAuctionConfirming || !transactionState.canClose ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} 
+                {transactionState.status === 'success' ? 'Auction Created!' : 'Create Auction'}
+              </Button>
+            )}
+            {transactionState.status === 'success' && (
+              <Button variant="outline" onClick={() => setShowAuctionDialog(false)} className="w-full">
+                Close
               </Button>
             )}
           </div>
@@ -867,23 +1084,39 @@ export default function ProfilePage() {
       {showCollectionSelector && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden relative flex flex-col">
-            <Button variant="ghost" size="sm" onClick={() => setShowCollectionSelector(false)} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
-            {transactionStatus !== 'idle' && currentTransactionType === 'collection' && (
-              <div className={`m-4 p-3 rounded-lg border ${transactionStatus === 'success' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-                <div className={`flex items-center gap-2 ${transactionStatus === 'success' ? 'text-green-700' : 'text-blue-700'}`}>
-                  {transactionStatus === 'success' ? <CheckCircle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
-                  <span className="text-sm font-medium">{transactionStatus === 'success' ? 'Collection listed successfully!' : 'Processing collection transaction...'}</span>
-                  </div>
-                {transactionStatus === 'success' && lastTransactionHash && (
-                    <div className="mt-3 space-y-2">
-                    <div className="text-xs bg-white p-2 rounded border font-mono">{lastTransactionHash}</div>
-                    <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
-                    </div>
-                  )}
-                </div>
-              )}
+                          <Button variant="ghost" size="sm" onClick={() => setShowCollectionSelector(false)} disabled={!transactionState.canClose} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
+                         {transactionState.status !== 'idle' && transactionState.type === 'collection' && (
+               <div className={`m-4 p-3 rounded-lg border ${transactionState.status === 'success' ? 'bg-green-50 border-green-200' : transactionState.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+                 <div className={`flex items-center gap-2 ${transactionState.status === 'success' ? 'text-green-700' : transactionState.status === 'error' ? 'text-red-700' : 'text-blue-700'}`}>
+                   {transactionState.status === 'success' ? (
+                     <CheckCircle className="h-4 w-4" />
+                   ) : transactionState.status === 'error' ? (
+                     <AlertCircle className="h-4 w-4" />
+                   ) : (
+                     <Loader2 className="h-4 w-4 animate-spin" />
+                   )}
+                   <span className="text-sm font-medium">{transactionState.message || 'Processing collection transaction...'}</span>
+                 </div>
+                 {(transactionState.status === 'success' || transactionState.status === 'error') && transactionState.txHash && (
+                   <div className="mt-3 space-y-2">
+                     <div className="flex items-center gap-2">
+                       <div className="text-xs bg-white p-2 rounded border font-mono flex-1">{transactionState.txHash}</div>
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         onClick={copyTxHash}
+                         className="h-8 w-8 p-0"
+                       >
+                         <Copy className="h-3 w-3" />
+                       </Button>
+                     </div>
+                     <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${transactionState.txHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
+                   </div>
+                 )}
+               </div>
+             )}
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <CollectionSelector nfts={nfts} isLoading={isCollectionListing || isMarketPending || isMarketConfirming} onClose={() => setShowCollectionSelector(false)} onSell={handleListCollection} />
+              <CollectionSelector nfts={nfts} isLoading={isCollectionListing || isMarketPending || isMarketConfirming || !transactionState.canClose} onClose={() => setShowCollectionSelector(false)} onSell={handleListCollection} />
             </div>
           </div>
         </div>
@@ -892,13 +1125,46 @@ export default function ProfilePage() {
       {showAuctionCollectionSelector && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden relative flex flex-col">
-            <Button variant="ghost" size="sm" onClick={() => setShowAuctionCollectionSelector(false)} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
-            <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <AuctionCollectionSelector nfts={nfts} isLoading={isAuctionPending || isAuctionConfirming} onClose={() => setShowAuctionCollectionSelector(false)} onCreateAuction={handleCreateCollectionAuction} />
+            <Button variant="ghost" size="sm" onClick={() => setShowAuctionCollectionSelector(false)} disabled={!transactionState.canClose} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
+            
+            {/* Enhanced Transaction Status for Collection Auctions */}
+            {transactionState.status !== 'idle' && (transactionState.type === 'auction_collection' || (transactionState.type === null && (isAuctionPending || isAuctionConfirming))) && (
+              <div className={`m-4 p-3 rounded-lg border ${transactionState.status === 'success' ? 'bg-green-50 border-green-200' : transactionState.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+                <div className={`flex items-center gap-2 ${transactionState.status === 'success' ? 'text-green-700' : transactionState.status === 'error' ? 'text-red-700' : 'text-blue-700'}`}>
+                  {transactionState.status === 'success' ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : transactionState.status === 'error' ? (
+                    <AlertCircle className="h-4 w-4" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  <span className="text-sm font-medium">{transactionState.message || 'Processing collection auction transaction...'}</span>
                 </div>
-            {showSuccessNotification && <div className="absolute left-0 right-0 top-0 mx-auto mt-4 w-fit p-3 rounded bg-green-100 text-green-800 text-center font-medium">{successNotificationMessage}</div>}
-                </div>
+                {(transactionState.status === 'success' || transactionState.status === 'error') && transactionState.txHash && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs bg-white p-2 rounded border font-mono flex-1">{transactionState.txHash}</div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={copyTxHash}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${transactionState.txHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
+                  </div>
+                )}
               </div>
+            )}
+            
+            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+              <AuctionCollectionSelector nfts={nfts} isLoading={isAuctionPending || isAuctionConfirming || !transactionState.canClose} onClose={() => setShowAuctionCollectionSelector(false)} onCreateAuction={handleCreateCollectionAuction} />
+            </div>
+            {showSuccessNotification && <div className="absolute left-0 right-0 top-0 mx-auto mt-4 w-fit p-3 rounded bg-green-100 text-green-800 text-center font-medium">{successNotificationMessage}</div>}
+          </div>
+        </div>
       )}
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">

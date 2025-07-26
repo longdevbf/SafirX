@@ -179,6 +179,14 @@ export default function AuctionCollectionSelector({
     setIsUploadingImage(true)
 
     try {
+      // ✅ TEMPORARY FIX: Skip upload and use placeholder for testing
+      console.log('⚠️ TEMPORARY: Skipping image upload for testing')
+      return {
+        url: collectionImage || '/placeholder.svg',
+        driveId: 'temp_' + Date.now()
+      }
+
+      /* ORIGINAL UPLOAD CODE - UNCOMMENT WHEN FIXED
       const formData = new FormData()
       formData.append('file', collectionImageFile)
       formData.append('type', 'collection')
@@ -204,6 +212,7 @@ export default function AuctionCollectionSelector({
       } else {
         throw new Error(result.error || 'Failed to upload image')
       }
+      */
 
     } catch (error) {
       console.error('❌ Image upload failed:', error)

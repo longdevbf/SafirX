@@ -9,10 +9,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
     }
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'audio/mp3']
+    console.log('📁 File info:', {
+      name: file.name,
+      type: file.type,
+      size: file.size
+    })
+
+    // Validate file type - more permissive for images
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+      'video/mp4', 'video/webm', 'video/quicktime',
+      'audio/mp3', 'audio/wav', 'audio/ogg'
+    ]
+    
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 })
+      console.error('❌ Invalid file type:', file.type)
+      return NextResponse.json({ 
+        error: `Invalid file type: ${file.type}. Allowed types: ${allowedTypes.join(', ')}` 
+      }, { status: 400 })
     }
 
     // Validate file size (100MB limit)
@@ -22,10 +36,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for Pinata credentials
-    const PINATA_JWT = process.env.NEXT_PUBLIC_JWT
+    const PINATA_JWT = process.env.JWT || process.env.NEXT_PUBLIC_JWT
     const PINATA_GATEWAY = process.env.GATEWAY
 
+    console.log('🔍 Checking Pinata config:', {
+      hasJWT: !!PINATA_JWT,
+      hasGateway: !!PINATA_GATEWAY,
+      jwtLength: PINATA_JWT?.length || 0
+    })
+
     if (!PINATA_JWT) {
+      console.error('❌ Pinata JWT not found in environment variables')
       return NextResponse.json({ error: 'Pinata configuration not found' }, { status: 500 })
     }
 
@@ -48,7 +69,7 @@ export async function POST(request: NextRequest) {
     })
     pinataData.append('pinataOptions', pinataOptions)
 
-   // console.log('📤 Uploading to Pinata...')
+    console.log('📤 Uploading to Pinata...')
     const pinataResponse = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
       method: 'POST',
       headers: {
@@ -57,10 +78,19 @@ export async function POST(request: NextRequest) {
       body: pinataData,
     })
 
+    console.log('📊 Pinata response status:', pinataResponse.status)
+
     if (!pinataResponse.ok) {
-      const errorData = await pinataResponse.json()
-      console.error('Pinata upload failed:', errorData)
-      return NextResponse.json({ error: 'Failed to upload to IPFS' }, { status: 500 })
+      const errorText = await pinataResponse.text()
+      console.error('❌ Pinata upload failed:', {
+        status: pinataResponse.status,
+        statusText: pinataResponse.statusText,
+        error: errorText
+      })
+      return NextResponse.json({ 
+        error: `Failed to upload to IPFS: ${pinataResponse.status} ${pinataResponse.statusText}`,
+        details: errorText
+      }, { status: 500 })
     }
 
     const pinataResult = await pinataResponse.json()

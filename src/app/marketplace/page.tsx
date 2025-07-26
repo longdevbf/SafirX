@@ -1401,14 +1401,18 @@ export default function MarketplacePage() {
                               <div className="flex gap-2">
                                 <Button 
                                   variant="outline"
+                                  size="sm"
                                   className="flex-1"
                                   onClick={() => openEditDialog(nft)}
+                                  disabled={isProcessing(nft)}
                                 >
                                   <Edit className="w-4 h-4 mr-2" />
                                   Edit Price
                                 </Button>
                                 <Button 
                                   variant="destructive"
+                                  size="sm"
+                                  className="px-3"
                                   onClick={() => handleCancelListing(nft)}
                                   disabled={isProcessing(nft)}
                                 >
@@ -1450,10 +1454,10 @@ export default function MarketplacePage() {
                               </div>
                             )
                           ) : isOwner(nft) ? (
-                            // ✅ CẬP NHẬT: Thêm Link cho NFT thường
-                            <div className="space-y-2">
+                            // ✅ CẬP NHẬT: Layout nhất quán với buyer
+                            <div className="flex flex-col gap-2">
                               <Link href={`/marketplace/nft/${nft.id || nft.listingId}`}>
-                                <Button variant="outline" className="w-full">
+                                <Button variant="outline" className="w-full" size="sm">
                                   <Eye className="w-4 h-4 mr-2" />
                                   View Details
                                 </Button>
@@ -1464,13 +1468,15 @@ export default function MarketplacePage() {
                                   size="sm"
                                   className="flex-1"
                                   onClick={() => openEditDialog(nft)}
+                                  disabled={isProcessing(nft)}
                                 >
                                   <Edit className="w-4 h-4 mr-2" />
                                   Edit Price
                                 </Button>
                                 <Button 
                                   variant="destructive" 
-                                 
+                                  size="sm"
+                                  className="px-3"
                                   onClick={() => handleCancelListing(nft)}
                                   disabled={isProcessing(nft)}
                                 >
@@ -1485,13 +1491,14 @@ export default function MarketplacePage() {
                           ) : (
                             <div className="flex flex-col gap-2">
                               <Link href={`/marketplace/nft/${nft.id || nft.listingId}`}>
-                                <Button variant="outline" className="w-full">
+                                <Button variant="outline" className="w-full" size="sm">
                                   <Eye className="w-4 h-4 mr-2" />
                                   View Details
                                 </Button>
                               </Link>
                               <Button 
                                 className={`w-full ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                size="sm"
                                 onClick={() => handlePurchase(nft)}
                                 disabled={isProcessing(nft) || !nft.canPurchase || !isConnected}
                                 title={!isConnected ? "Please connect your wallet to purchase" : ""}

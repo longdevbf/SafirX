@@ -41,4 +41,12 @@ export interface ProcessedAuction {
         attributes?: any[];
     };
     individualNftMetadata?: any[];
+    
+    // ✅ Claim/Reclaim status
+    nftClaimed: boolean;
+    nftReclaimed: boolean;
+    claimTxHash: string | null;
+    reclaimTxHash: string | null;
+    claimedAt: string | null;
+    reclaimedAt: string | null;
 } 

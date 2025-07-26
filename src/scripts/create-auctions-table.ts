@@ -93,8 +93,17 @@ async function createAuctionsTable() {
         total_bids INTEGER DEFAULT 0,
         unique_bidders INTEGER DEFAULT 0,
         
+        -- ✅ Claim/Reclaim status
+        nft_claimed BOOLEAN DEFAULT FALSE,
+        nft_reclaimed BOOLEAN DEFAULT FALSE,
+        claim_tx_hash VARCHAR(66) NULL,
+        reclaim_tx_hash VARCHAR(66) NULL,
+        claimed_at TIMESTAMP NULL,
+        reclaimed_at TIMESTAMP NULL,
+        
         -- Metadata
         nft_metadata JSONB NULL,  -- Store NFT metadata for fast display
+        nft_metadata_individuals JSONB NULL,  -- Store individual NFT metadata for collections
         
         -- Blockchain info
         creation_tx_hash VARCHAR(66) NOT NULL,

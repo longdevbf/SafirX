@@ -1524,13 +1524,15 @@ export default function MarketplacePage() {
                   </div>
                 )}
                 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
-                  />
+                {/* Pagination - ✅ Hiển thị khi có ít nhất 1 item */}
+                {filteredNFTs.length > 0 && (
+                  <div className="mt-8">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={Math.max(totalPages, 1)} // ✅ Đảm bảo ít nhất 1 trang
+                      onPageChange={handlePageChange}
+                    />
+                  </div>
                 )}
               </TabsContent>
             </Tabs>

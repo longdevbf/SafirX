@@ -1355,29 +1355,43 @@ export default function MarketplacePage() {
                         </div>
                         <CardContent className="p-4">
                           <div className="flex items-center gap-2 mb-1">
-                            <div className="text-sm text-muted-foreground">{nft.collectionName}</div>
-                            {nft.verified && <Star className="w-3 h-3 text-blue-500 fill-current" />}
+                            <div className="text-sm text-muted-foreground truncate">{nft.collectionName}</div>
+                            {nft.verified && <Star className="w-3 h-3 text-blue-500 fill-current flex-shrink-0" />}
                           </div>
-                          <h3 className="font-semibold mb-2 truncate">{nft.name}</h3>
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <div className="text-sm text-muted-foreground">
-                                {nft.isBundle ? "Bundle Price" : "Current Price"}
+                          <h3 className="font-semibold mb-2 truncate" title={nft.name}>{nft.name}</h3>
+                          
+                          {/* ✅ Cải thiện layout giá */}
+                          <div className="space-y-2 mb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm text-muted-foreground">
+                                  {nft.isBundle ? "Bundle Price" : "Current Price"}
+                                </div>
+                                <div className="font-bold text-lg truncate" title={`${nft.price} ROSE`}>
+                                  {(() => {
+                                    const price = parseFloat(nft.price || "0");
+                                    if (price >= 1000) {
+                                      return `${(price / 1000).toFixed(1)}K`;
+                                    }
+                                    // ✅ Kiểm tra nếu là số nguyên thì không thêm decimal
+                                    return price % 1 === 0 ? `${Math.floor(price)}` : price.toFixed(3);
+                                  })()} ROSE
+                                </div>
                               </div>
-                              <div className="font-bold">{nft.price} ROSE</div>
-                              <div className="text-xs text-muted-foreground">
-                                {rosePrice ? (
-                                  `≈ $${((parseFloat(nft.price || "0")) * rosePrice).toFixed(2)}`
-                                ) : (
-                                  "Đang tải giá..."
-                                )}
+                              <div className="text-right ml-2 flex-shrink-0">
+                                <div className="text-xs text-muted-foreground">USD</div>
+                                <div className="text-sm font-medium">
+                                  {rosePrice ? (
+                                    `$${((parseFloat(nft.price || "0")) * rosePrice).toFixed(2)}`
+                                  ) : (
+                                    "..."
+                                  )}
+                                </div>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-sm text-muted-foreground">Seller</div>
-                              <div className="text-sm font-mono">
-                                {nft.seller ? `${nft.seller.slice(0, 6)}...${nft.seller.slice(-4)}` : 'Unknown'}
-                              </div>
+                            
+                            <div className="text-center py-1 px-2 bg-muted rounded text-xs">
+                              Seller: {nft.seller ? `${nft.seller.slice(0, 6)}...${nft.seller.slice(-4)}` : 'Unknown'}
                             </div>
                           </div>
                           
@@ -1406,9 +1420,17 @@ export default function MarketplacePage() {
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex gap-2">
+                              <div className="space-y-2">
                                 <Button 
-                                  className="flex-1"
+                                  variant="outline"
+                                  className="w-full"
+                                  onClick={() => handleCollectionClick(nft)}
+                                >
+                                  <Users className="w-4 h-4 mr-2" />
+                                  View Collection
+                                </Button>
+                                <Button 
+                                  className="w-full"
                                   onClick={() => handlePurchase(nft)}
                                   disabled={isProcessing(nft) || !nft.canPurchase}
                                 >
@@ -1420,7 +1442,7 @@ export default function MarketplacePage() {
                                   ) : !isConnected ? (
                                     <>
                                       <ShoppingCart className="w-4 h-4 mr-2" />
-                                      Connect Wallet to Buy
+                                      Connect Wallet
                                     </>
                                   ) : (
                                     <>
@@ -1428,12 +1450,6 @@ export default function MarketplacePage() {
                                       Buy Bundle
                                     </>
                                   )}
-                                </Button>
-                                <Button 
-                                  variant="outline"
-                                  onClick={() => handleCollectionClick(nft)}
-                                >
-                                  <Users className="w-4 h-4" />
                                 </Button>
                               </div>
                             )
@@ -1471,8 +1487,7 @@ export default function MarketplacePage() {
                               </div>
                             </div>
                           ) : (
-                            // ✅ CẬP NHẬT: Thêm Link cho NFT thường
-                            <div className="space-y-2">
+                            <div className="flex flex-col gap-2">
                               <Link href={`/marketplace/nft/${nft.id || nft.listingId}`}>
                                 <Button variant="outline" className="w-full">
                                   <Eye className="w-4 h-4 mr-2" />
@@ -1492,7 +1507,7 @@ export default function MarketplacePage() {
                                 ) : !isConnected ? (
                                   <>
                                     <ShoppingCart className="w-4 h-4 mr-2" />
-                                    Connect Wallet to Buy
+                                    Connect Wallet
                                   </>
                                 ) : (
                                   <>

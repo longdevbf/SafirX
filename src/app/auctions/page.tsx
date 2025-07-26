@@ -91,7 +91,15 @@ const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): Processe
         },
         individualNftMetadata: Array.isArray(dbAuction.nft_metadata_individuals)
             ? dbAuction.nft_metadata_individuals
-            : []
+            : [],
+        
+        // ✅ Claim/Reclaim status
+        nftClaimed: dbAuction.nft_claimed || false,
+        nftReclaimed: dbAuction.nft_reclaimed || false,
+        claimTxHash: dbAuction.claim_tx_hash,
+        reclaimTxHash: dbAuction.reclaim_tx_hash,
+        claimedAt: dbAuction.claimed_at,
+        reclaimedAt: dbAuction.reclaimed_at
     };
 };
 
@@ -362,7 +370,6 @@ export default function AuctionsPage() {
     // ✅ Thêm handleClaimNFT cho winner
     const handleClaimNFT = async(auctionId: string, remainingAmount: string) => {
         try {
-            // ✅ Chỉ truyền auctionId, không cần remainingAmount
             const txHash = await claimNFT(parseInt(auctionId), remainingAmount)
             
             toast({
@@ -385,9 +392,44 @@ export default function AuctionsPage() {
             }
 
             if (confirmed) {
+                // ✅ Update database với trạng thái claimed
+                try {
+                    const response = await fetch('/api/auctions/claim', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            auctionId: parseInt(auctionId),
+                            txHash,
+                            claimerAddress: address
+                        })
+                    })
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to update claim status: ${response.status}`)
+                    }
+                } catch (dbError) {
+                    console.error('❌ Failed to update claim status:', dbError)
+                }
+
                 toast({
-                    title: "✅ NFT Claimed",
-                    description: "You have successfully claimed your NFT!",
+                    title: "✅ NFT Claimed Successfully!",
+                    description: (
+                        <div className="space-y-2">
+                            <p>You have successfully claimed your NFT!</p>
+                            <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                                Tx: {txHash.slice(0, 10)}...{txHash.slice(-6)}
+                            </div>
+                            <a
+                                href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline text-xs block"
+                            >
+                                View on Explorer →
+                            </a>
+                        </div>
+                    ),
+                    duration: 15000
                 })
 
                 refetch()
@@ -432,12 +474,46 @@ export default function AuctionsPage() {
             }
 
             if (confirmed) {
+                // ✅ Update database với trạng thái reclaimed
+                try {
+                    const response = await fetch('/api/auctions/reclaim', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            auctionId: parseInt(auctionId),
+                            txHash,
+                            sellerAddress: address
+                        })
+                    })
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to update reclaim status: ${response.status}`)
+                    }
+                } catch (dbError) {
+                    console.error('❌ Failed to update reclaim status:', dbError)
+                }
+
                 toast({
-                    title: "✅ NFT Reclaimed",
-                    description: "You have successfully reclaimed your NFT!",
+                    title: "✅ NFT Reclaimed Successfully!",
+                    description: (
+                        <div className="space-y-2">
+                            <p>You have successfully reclaimed your NFT!</p>
+                            <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                                Tx: {txHash.slice(0, 10)}...{txHash.slice(-6)}
+                            </div>
+                            <a
+                                href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline text-xs block"
+                            >
+                                View on Explorer →
+                            </a>
+                        </div>
+                    ),
+                    duration: 15000
                 })
                 
-                // Refresh auction data
                 refetch()
             } else {
                 toast({
@@ -1187,16 +1263,49 @@ export default function AuctionsPage() {
                                         if (!open) setShowBidHistory(null)
                                     }}
                                     onTrigger={() => setShowBidHistory(auction.auctionId.toString())}
-                                    onClaimNFT={handleClaimNFT} // ✅ Thêm prop
+                                    onClaimNFT={handleClaimNFT}
                                     isPending={isPending}
                                     isConfirming={isConfirming}
                                     userAddress={address}
                                 />
                                 
-                                {/* ✅ Xóa nút Claim NFT ở ngoài vì đã có trong dialog */}
+                                {/* ✅ Claim NFT status for winner */}
+                                {isWinner && !auction.nftClaimed && (
+                                    <Button
+                                        onClick={() => {
+                                            const remainingAmount = formatEther(auction.highestBid - auction.startingPrice)
+                                            handleClaimNFT(auction.auctionId.toString(), remainingAmount)
+                                        }}
+                                        disabled={isPending || isConfirming}
+                                        className="w-full">
+                                        {isPending || isConfirming ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2"/>
+                                                Claiming...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Crown className="w-4 h-4 mr-2"/>
+                                                Claim NFT
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
                                 
-                                {/* ✅ Thêm Reclaim NFT button cho seller */}
-                                {isSeller && !isWinner && (
+                                {isWinner && auction.nftClaimed && (
+                                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+                                        <div className="flex items-center justify-center gap-2 text-green-700">
+                                            <CheckCircle className="w-4 h-4"/>
+                                            <span className="font-medium">NFT Claimed Successfully!</span>
+                                        </div>
+                                        <p className="text-sm text-green-600 mt-1">
+                                            Winner has received the NFT
+                                        </p>
+                                    </div>
+                                )}
+                                
+                                {/* ✅ Reclaim NFT status for seller */}
+                                {isSeller && !isWinner && !auction.nftReclaimed && (
                                     <Button
                                         variant="outline"
                                         onClick={() => handleReclaimNFT(auction.auctionId.toString())}
@@ -1216,10 +1325,17 @@ export default function AuctionsPage() {
                                     </Button>
                                 )}
                                 
-                                {/* ✅ Xóa các button không tồn tại:
-                                - handleRevealBid
-                                - handleEnablePublicHistory
-                                */}
+                                {isSeller && !isWinner && auction.nftReclaimed && (
+                                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                                        <div className="flex items-center justify-center gap-2 text-blue-700">
+                                            <CheckCircle className="w-4 h-4"/>
+                                            <span className="font-medium">NFT Reclaimed Successfully!</span>
+                                        </div>
+                                        <p className="text-sm text-blue-600 mt-1">
+                                            Seller has received the NFT back
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

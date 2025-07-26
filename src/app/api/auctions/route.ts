@@ -175,9 +175,11 @@ async function createAuction(data: CreateAuctionData) {
         collection_image_url, collection_image_drive_id,
         starting_price, reserve_price, min_bid_increment,
         start_time, end_time, duration_hours, allow_public_reveal,
-        nft_metadata, nft_metadata_individuals, creation_tx_hash, state
+        nft_metadata, nft_metadata_individuals, creation_tx_hash, state,
+        nft_claimed, nft_reclaimed, claim_tx_hash, reclaim_tx_hash, claimed_at, reclaimed_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'ACTIVE'
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'ACTIVE',
+        FALSE, FALSE, NULL, NULL, NULL, NULL
       ) RETURNING *
     `
 

@@ -31,7 +31,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <WalletProvider>
               <MarketplaceProvider>
                 <AuctionDatabaseProvider>
-                  {children}
+                  <div suppressHydrationWarning>
+                    {mounted && children}
+                  </div>
                 </AuctionDatabaseProvider>
               </MarketplaceProvider>
             </WalletProvider>

@@ -24,12 +24,13 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useWallet } from "@/context/walletContext"
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { useMarketplaceNFTs, useNFTMarket, useCollectionDetail } from "@/hooks/use-market"
 import { ProcessedNFT } from "@/interfaces/nft"
 import { useToast } from "@/hooks/use-toast"
 import { useMarketplace } from "@/context/marketplaceContext"
 import { getRosePrice } from "@/services/rose_usd"
+import TransactionToast from '@/components/ui/TransactionToast'
+import { useTransactionToast } from '@/hooks/use-TransactionToast'
 
 // Helper function for robust ID extraction
 const getListingId = (nft: ProcessedNFT): string => {
@@ -90,6 +91,9 @@ export default function MarketplacePage() {
     nftId: string
     data?: any
   } | null>(null)
+
+  // ✅ Thêm transaction toast hook
+  const { toast: transactionToast, showToast, hideToast } = useTransactionToast()
 
   const { address, isConnected } = useWallet()
   const { toast } = useToast()
@@ -507,9 +511,12 @@ export default function MarketplacePage() {
     }
   }, [cancelListingUnified, toast])
 
-  // ✅ Handle successful transactions
+  // ✅ Handle successful transactions - cập nhật để hiển thị transaction toast
   useEffect(() => {
     if (isConfirmed && hash && pendingTransaction) {
+      // Hiển thị transaction toast với hash
+      showToast(hash)
+      
       const handleDatabaseUpdate = async () => {
         try {
           console.log('🔄 Processing database update:', pendingTransaction)
@@ -538,6 +545,7 @@ export default function MarketplacePage() {
               setSelectedNFT(null)
               setNewPrice("")
               setIsEditDialogOpen(false)
+              closeDialog() // Đóng dialog
               break
               
             case 'cancel':
@@ -568,7 +576,7 @@ export default function MarketplacePage() {
       setPendingTransaction(null)
       setProcessingNFT(null)
     }
-  }, [isConfirmed, hash, pendingTransaction, buyNFT, updateNFTPrice, cancelNFTListing, refetch, toast])
+  }, [isConfirmed, hash, pendingTransaction, buyNFT, updateNFTPrice, cancelNFTListing, refetch, toast, showToast, closeDialog])
 
   // ✅ Handle transaction errors
   useEffect(() => {
@@ -1538,6 +1546,15 @@ export default function MarketplacePage() {
           </div>
         </div>
 
+        {/* Transaction Toast */}
+        {transactionToast.isVisible && (
+          <TransactionToast
+            txHash={transactionToast.txHash}
+            onClose={hideToast}
+            duration={10000} // 10 giây
+          />
+        )}
+        
         {/* Edit Price Dialog - đặt ở cuối component */}
         <Dialog open={isEditDialogOpen} onOpenChange={(open) => !open && closeDialog()}>
           <DialogContent>

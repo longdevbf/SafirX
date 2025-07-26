@@ -140,7 +140,15 @@ export default function AuctionDetailPage() {
                     },
                     individualNftMetadata: Array.isArray(foundAuction.nft_metadata_individuals)
                         ? foundAuction.nft_metadata_individuals
-                        : []
+                        : [],
+                    
+                    // ✅ Claim/Reclaim status
+                    nftClaimed: foundAuction.nft_claimed || false,
+                    nftReclaimed: foundAuction.nft_reclaimed || false,
+                    claimTxHash: foundAuction.claim_tx_hash,
+                    reclaimTxHash: foundAuction.reclaim_tx_hash,
+                    claimedAt: foundAuction.claimed_at,
+                    reclaimedAt: foundAuction.reclaimed_at
                 }
                 
                 setAuction(processedAuction)

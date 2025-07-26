@@ -38,24 +38,42 @@ interface SyncListingData {
 
 interface SyncAuctionData {
   auction_id: string
+  auction_type: 'SINGLE_NFT' | 'COLLECTION'
+  title: string
+  description?: string
+  seller_address: string
   nft_contract: string
-  token_id: string
-  seller: string
+  token_id: string | null
+  token_ids?: string[]
+  nft_count: number
+  collection_image_url?: string
+  collection_image_drive_id?: string | null
   starting_price: string
   reserve_price: string
   min_bid_increment: string
+  start_time: Date
   end_time: Date
+  duration_hours: number
+  allow_public_reveal: boolean
+  nft_metadata?: any
+  individual_nft_metadata?: any[]
+  creation_tx_hash: string
+  
+  // ✅ Claim/Reclaim status (default values)
+  nft_claimed?: boolean
+  nft_reclaimed?: boolean
+  claim_tx_hash?: string | null
+  reclaim_tx_hash?: string | null
+  claimed_at?: Date | null
+  reclaimed_at?: Date | null
+  
+  // Legacy fields for compatibility
   collection_name?: string
-  name: string
-  description?: string
+  name?: string
+  seller?: string
   category?: string
   image: string
   attributes?: any[]
-  is_collection?: boolean
-  collection_token_ids?: string[]
-  collection_image?: string
-  allow_public_reveal?: boolean
-  individual_nft_metadata?: any[]
   tx_hash: string
 }
 
@@ -113,30 +131,31 @@ export async function syncListingToDatabase(data: SyncListingData): Promise<bool
   }
 }
 
-// ✅ Sửa syncAuctionToDatabase - lưu giờ vào database
-export async function syncAuctionToDatabase(auctionData: any): Promise<boolean> {
+// ✅ Sửa syncAuctionToDatabase - đầy đủ trường mới
+export async function syncAuctionToDatabase(auctionData: SyncAuctionData): Promise<boolean> {
   try {
-    console.log(' Syncing auction to database:', auctionData.auction_id)
+    console.log('🔄 Syncing auction to database:', auctionData.auction_id)
     console.log('📊 Full auction data:', JSON.stringify(auctionData, null, 2))
     
-    if (!auctionData.seller) {
-      console.error('❌ sellerAddress is undefined in auctionData')
+    // ✅ Validate required fields
+    if (!auctionData.seller_address && !auctionData.seller) {
+      console.error('❌ seller_address is required in auctionData')
       return false
     }
     
     // ✅ Xử lý metadata cho collection auctions
     let nftMetadata: any = {
-      name: auctionData.name || 'Auction',
+      name: auctionData.title || auctionData.name || 'Auction',
       description: auctionData.description || '',
-      image: auctionData.collection_image || auctionData.individual_nft_metadata?.[0]?.image || '/placeholder-nft.jpg',
+      image: auctionData.collection_image_url || auctionData.individual_nft_metadata?.[0]?.image || '/placeholder-nft.jpg',
       attributes: auctionData.attributes || []
     };
     
     // ✅ Nếu là collection, thêm metadata của tất cả NFTs
-    if (auctionData.is_collection && auctionData.individual_nft_metadata?.length > 0) {
+    if (auctionData.auction_type === 'COLLECTION' && auctionData.individual_nft_metadata && auctionData.individual_nft_metadata.length > 0) {
       nftMetadata = {
         ...nftMetadata,
-        coverImage: auctionData.collection_image || auctionData.individual_nft_metadata?.[0]?.image,
+        coverImage: auctionData.collection_image_url || auctionData.individual_nft_metadata[0]?.image,
         individualNfts: auctionData.individual_nft_metadata.map((nft: any) => ({
           ...nft,
           image: nft.image || '/placeholder-nft.jpg'
@@ -145,36 +164,29 @@ export async function syncAuctionToDatabase(auctionData: any): Promise<boolean> 
       };
     }
     
-    // ✅ Lấy duration trực tiếp từ auctionData (giờ)
-    const startTime = Math.floor(Date.now() / 1000)
-    const endTime = Math.floor(new Date(auctionData.end_time).getTime() / 1000)
-    
-    // ✅ Ưu tiên duration từ auctionData, nếu không thì tính từ end_time
-    const durationHours = auctionData.duration || Math.ceil((endTime - startTime) / 3600)
-    
     const apiData = {
       action: 'create',
       auctionId: parseInt(auctionData.auction_id),
-      auctionType: auctionData.is_collection ? 'COLLECTION' : 'SINGLE_NFT',
-      title: auctionData.name || 'Auction',
+      auctionType: auctionData.auction_type,
+      title: auctionData.title || auctionData.name || 'Auction',
       description: auctionData.description || '',
-      sellerAddress: auctionData.seller,
+      sellerAddress: auctionData.seller_address || auctionData.seller,
       nftContract: auctionData.nft_contract,
-      tokenId: auctionData.token_id ? parseInt(auctionData.token_id) : undefined,
-      tokenIds: auctionData.collection_token_ids?.map((id: string) => parseInt(id)),
-      nftCount: auctionData.is_collection ? auctionData.collection_token_ids?.length || 1 : 1,
-      collectionImageUrl: auctionData.collection_image,
-      collectionImageDriveId: '',
+      tokenId: auctionData.token_id ? parseInt(auctionData.token_id) : null,
+      tokenIds: auctionData.token_ids?.map((id: string) => parseInt(id)) || null,
+      nftCount: auctionData.nft_count,
+      collectionImageUrl: auctionData.collection_image_url || null,
+      collectionImageDriveId: auctionData.collection_image_drive_id || null,
       startingPrice: auctionData.starting_price,
       reservePrice: auctionData.reserve_price,
       minBidIncrement: auctionData.min_bid_increment,
-      startTime: startTime,
-      endTime: endTime,
-      durationHours: durationHours, // ✅ Lưu giờ vào database
-      allowPublicReveal: auctionData.allow_public_reveal || false,
+      startTime: Math.floor(auctionData.start_time.getTime() / 1000),
+      endTime: Math.floor(auctionData.end_time.getTime() / 1000),
+      durationHours: auctionData.duration_hours,
+      allowPublicReveal: auctionData.allow_public_reveal,
       nftMetadata: nftMetadata,
       individualNftMetadata: auctionData.individual_nft_metadata || [],
-      creationTxHash: auctionData.tx_hash
+      creationTxHash: auctionData.creation_tx_hash
     }
     
     console.log('📤 Sending to API:', JSON.stringify(apiData, null, 2))
@@ -290,13 +302,13 @@ export function prepareListingData(
   }
 }
 
-// ✅ Sửa prepareAuctionData để đảm bảo seller không undefined
+// ✅ Sửa prepareAuctionData với schema mới đầy đủ
 export function prepareAuctionData(
   auctionId: string,
   nftContract: string,
   tokenId: string | null,
   collectionTokenIds: string[] | null,
-  seller: string, // ✅ Đảm bảo seller không undefined
+  seller: string,
   auctionParams: {
     auctionType: 'SINGLE_NFT' | 'COLLECTION'
     title: string
@@ -304,10 +316,10 @@ export function prepareAuctionData(
     startingPrice: string
     reservePrice: string
     minBidIncrement: string
-    duration: number // ✅ Đây là giờ
+    duration: number // Duration in hours
     allowPublicReveal: boolean
     collectionImage?: string
-    collectionImageDriveId?: string
+    collectionImageDriveId?: string | null
     individualNftMetadata?: any[]
   },
   txHash: string,
@@ -320,34 +332,56 @@ export function prepareAuctionData(
     collectionName?: string
   }
 ): SyncAuctionData {
-  // ✅ Tính end_time từ duration (giờ)
-  const endTime = new Date(Date.now() + (auctionParams.duration * 60 * 60 * 1000))
-  const isCollection = auctionParams.auctionType === 'COLLECTION'
-  
   if (!seller) {
     throw new Error('seller address is required')
   }
   
+  const startTime = new Date()
+  const endTime = new Date(Date.now() + (auctionParams.duration * 60 * 60 * 1000))
+  
   return {
     auction_id: auctionId,
+    auction_type: auctionParams.auctionType,
+    title: auctionParams.title,
+    description: auctionParams.description,
+    seller_address: seller,
     nft_contract: nftContract,
-    token_id: tokenId || '',
-    seller: seller,
+    token_id: tokenId,
+    token_ids: collectionTokenIds || undefined,
+    nft_count: auctionParams.auctionType === 'COLLECTION' ? (collectionTokenIds?.length || 1) : 1,
+    collection_image_url: auctionParams.collectionImage || nftData.image,
+    collection_image_drive_id: auctionParams.collectionImageDriveId,
     starting_price: auctionParams.startingPrice,
     reserve_price: auctionParams.reservePrice,
     min_bid_increment: auctionParams.minBidIncrement,
+    start_time: startTime,
     end_time: endTime,
+    duration_hours: auctionParams.duration,
+    allow_public_reveal: auctionParams.allowPublicReveal,
+    nft_metadata: {
+      name: nftData.name,
+      description: nftData.description || '',
+      image: nftData.image,
+      attributes: nftData.attributes || []
+    },
+    individual_nft_metadata: auctionParams.individualNftMetadata || [],
+    creation_tx_hash: txHash,
+    
+    // ✅ Default claim/reclaim status
+    nft_claimed: false,
+    nft_reclaimed: false,
+    claim_tx_hash: null,
+    reclaim_tx_hash: null,
+    claimed_at: null,
+    reclaimed_at: null,
+    
+    // Legacy compatibility fields
     collection_name: nftData.collectionName || nftData.name || '',
     name: auctionParams.title,
-    description: auctionParams.description,
+    seller: seller,
     category: nftData.category || '',
     image: auctionParams.collectionImage || nftData.image,
     attributes: nftData.attributes || [],
-    is_collection: isCollection,
-    collection_token_ids: collectionTokenIds || [],
-    collection_image: auctionParams.collectionImage || nftData.image,
-    allow_public_reveal: auctionParams.allowPublicReveal,
-    individual_nft_metadata: auctionParams.individualNftMetadata || [],
     tx_hash: txHash
   }
 }

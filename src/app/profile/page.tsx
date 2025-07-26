@@ -336,13 +336,13 @@ export default function ProfilePage() {
     if (auctionId) {
       const auctionDataForDb = storedSelectedNFT
         ? prepareAuctionData(
-              auctionId,
+            auctionId,
             storedSelectedNFT.contractAddress,
-            storedSelectedNFT.tokenId,
-              null,
+            storedSelectedNFT.tokenId.toString(),
+            null,
             address!,
-              {
-                auctionType: 'SINGLE_NFT',
+            {
+              auctionType: 'SINGLE_NFT',
               title: storedAuctionData.title,
               description: storedAuctionData.description,
               startingPrice: storedAuctionData.startingPrice,
@@ -350,10 +350,17 @@ export default function ProfilePage() {
               minBidIncrement: storedAuctionData.minBidIncrement,
               duration: storedAuctionData.duration,
               allowPublicReveal: false,
-              collectionImage: storedSelectedNFT.image
+              collectionImage: storedSelectedNFT.image,
+              collectionImageDriveId: null
             },
             auctionHash as string,
-            storedSelectedNFT
+            {
+              name: storedSelectedNFT.name || `NFT #${storedSelectedNFT.tokenId}`,
+              description: storedSelectedNFT.description || '',
+              image: storedSelectedNFT.image || '/placeholder-nft.jpg',
+              attributes: storedSelectedNFT.attributes || [],
+              collectionName: storedSelectedNFT.collectionName || storedAuctionData.title
+            }
           )
         : prepareAuctionData(
             auctionId,
@@ -371,6 +378,7 @@ export default function ProfilePage() {
               duration: storedAuctionData.duration,
               allowPublicReveal: false,
               collectionImage: storedAuctionData.collectionImage,
+              collectionImageDriveId: null,
               // ✅ Lưu metadata của tất cả NFTs trong collection với image thực tế
               individualNftMetadata: storedAuctionData.tokenIds.map((tokenId: string) => {
                 const nft = nfts.find(n => 
@@ -381,7 +389,7 @@ export default function ProfilePage() {
                   tokenId: parseInt(tokenId),
                   name: nft?.name || `NFT #${tokenId}`,
                   description: nft?.description || '',
-                  image: nft?.image || '/placeholder-nft.jpg', // ✅ Lấy image thực tế từ NFT
+                  image: nft?.image || '/placeholder-nft.jpg',
                   attributes: nft?.attributes || [],
                   rarity: nft?.rarity || 'Common',
                   collectionName: nft?.collectionName || storedAuctionData.title
@@ -389,7 +397,13 @@ export default function ProfilePage() {
               })
             },
             auctionHash as string,
-            storedAuctionData
+            {
+              name: storedAuctionData.title,
+              description: storedAuctionData.description,
+              image: storedAuctionData.collectionImage || '/placeholder-nft.jpg',
+              attributes: [],
+              collectionName: storedAuctionData.title
+            }
           );
       
             const success = await syncAuctionToDatabase(auctionDataForDb)

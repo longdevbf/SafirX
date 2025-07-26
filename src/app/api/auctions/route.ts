@@ -38,13 +38,34 @@ export async function GET(request: NextRequest) {
       params.push(type)
     }
 
-    // Auto-update ended auctions
+    // ⚠️ TEMPORARILY DISABLED: Auto-update ended auctions
     const now = new Date()
+    console.log('🕒 Current time for auction status check:', now.toISOString())
+    
+    // Check which auctions would be updated
+    const checkResult = await pool.query(`
+      SELECT auction_id, title, end_time, state 
+      FROM auctions 
+      WHERE state = 'ACTIVE' AND end_time <= $1
+    `, [now])
+    
+    if (checkResult.rows.length > 0) {
+      console.log('🔄 Would update these auctions to ENDED:', checkResult.rows.map(a => ({
+        id: a.auction_id.slice(0,8),
+        title: a.title,
+        endTime: a.end_time,
+        currentState: a.state
+      })))
+    }
+    
+    // COMMENTED OUT FOR DEBUGGING
+    /*
     await pool.query(`
       UPDATE auctions 
       SET state = 'ENDED', updated_at = CURRENT_TIMESTAMP
       WHERE state = 'ACTIVE' AND end_time <= $1
     `, [now])
+    */
 
     query += ' ORDER BY created_at DESC'
 

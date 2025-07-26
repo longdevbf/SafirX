@@ -1430,19 +1430,15 @@ export default function MarketplacePage() {
                                   View Collection
                                 </Button>
                                 <Button 
-                                  className="w-full"
+                                  className={`w-full ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   onClick={() => handlePurchase(nft)}
-                                  disabled={isProcessing(nft) || !nft.canPurchase}
+                                  disabled={isProcessing(nft) || !nft.canPurchase || !isConnected}
+                                  title={!isConnected ? "Please connect your wallet to purchase" : ""}
                                 >
                                   {isProcessing(nft) ? (
                                     <>
                                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                       Processing...
-                                    </>
-                                  ) : !isConnected ? (
-                                    <>
-                                      <ShoppingCart className="w-4 h-4 mr-2" />
-                                      Connect Wallet
                                     </>
                                   ) : (
                                     <>
@@ -1474,7 +1470,7 @@ export default function MarketplacePage() {
                                 </Button>
                                 <Button 
                                   variant="destructive" 
-                                  size="sm"
+                                 
                                   onClick={() => handleCancelListing(nft)}
                                   disabled={isProcessing(nft)}
                                 >
@@ -1495,19 +1491,15 @@ export default function MarketplacePage() {
                                 </Button>
                               </Link>
                               <Button 
-                                className="w-full" 
+                                className={`w-full ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 onClick={() => handlePurchase(nft)}
-                                disabled={isProcessing(nft) || !nft.canPurchase}
+                                disabled={isProcessing(nft) || !nft.canPurchase || !isConnected}
+                                title={!isConnected ? "Please connect your wallet to purchase" : ""}
                               >
                                 {isProcessing(nft) ? (
                                   <>
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                     Processing...
-                                  </>
-                                ) : !isConnected ? (
-                                  <>
-                                    <ShoppingCart className="w-4 h-4 mr-2" />
-                                    Connect Wallet
                                   </>
                                 ) : (
                                   <>

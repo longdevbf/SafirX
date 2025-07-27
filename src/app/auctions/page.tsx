@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +37,8 @@ import {
     Info,
     Activity,
     Target,
-    AlertCircle
+    AlertCircle,
+    ExternalLink
 } from "lucide-react";
 import Image from "next/image";
 import { formatEther, parseEther } from "viem";
@@ -48,7 +49,6 @@ import { BidHistoryDialog } from "@/components/BidHistoryDialog";
 import CountdownTimer from "@/components/CountdownTimer";
 import  useSealedBidAuction  from "@/hooks/use-auction";
 import  {ProcessedAuction}  from "@/types/auction";
-import React from "react";
 import Link from "next/link"
 
 
@@ -96,6 +96,21 @@ const convertDatabaseToProcessedAuction = (dbAuction: DatabaseAuction): Processe
 };
 
 export default function AuctionsPage() {
+     const [isBiddingOnAuction, setIsBiddingOnAuction] = useState<string | null>(null) // Track which auction is being bid on
+    const [bidTransactionStatus, setBidTransactionStatus] = useState<'idle' | 'pending' | 'confirming' | 'success' | 'error'>('idle')
+    const [lastBidTransactionHash, setLastBidTransactionHash] = useState<string>('')
+    const [successfulBidAuctionId, setSuccessfulBidAuctionId] = useState<string | null>(null)
+    
+    // ✅ Thêm states cho claim/reclaim transaction tracking
+    const [isClaimingNFT, setIsClaimingNFT] = useState<string | null>(null) // Track which auction is being claimed
+    const [isReclaimingNFT, setIsReclaimingNFT] = useState<string | null>(null) // Track which auction is being reclaimed
+    const [claimTransactionStatus, setClaimTransactionStatus] = useState<'idle' | 'pending' | 'confirming' | 'success' | 'error'>('idle')
+    const [reclaimTransactionStatus, setReclaimTransactionStatus] = useState<'idle' | 'pending' | 'confirming' | 'success' | 'error'>('idle')
+    const [lastClaimTransactionHash, setLastClaimTransactionHash] = useState<string>('')
+    const [lastReclaimTransactionHash, setLastReclaimTransactionHash] = useState<string>('')
+    const [successfulClaimAuctionId, setSuccessfulClaimAuctionId] = useState<string | null>(null)
+    const [successfulReclaimAuctionId, setSuccessfulReclaimAuctionId] = useState<string | null>(null)
+    
     const [activeTab,
         setActiveTab] = useState < "active" | "ended" | "finalized" > ("active")
     const [selectedAuction,
@@ -125,6 +140,18 @@ export default function AuctionsPage() {
         bidderAddress: string;
         txHash: string
     } | null > (null)
+
+    // ✅ Add pending claim/reclaim tracking
+    const pendingClaimRef = React.useRef<{
+        auctionId: string;
+        remainingAmount: string;
+        txHash: string
+    } | null>(null)
+
+    const pendingReclaimRef = React.useRef<{
+        auctionId: string;
+        txHash: string
+    } | null>(null)
 
     // ✅ Add state để track finalizing auctions
     const [finalizingAuctions, setFinalizingAuctions] = useState<Set<string>>(new Set())
@@ -160,27 +187,31 @@ export default function AuctionsPage() {
     // - revealMyBid (không có trong contract)
     // - enablePublicBidHistory (không có trong contract)
 
-    // ✅ Sửa handlePlaceBid để đúng với sealed bid logic
+    // ✅ Sửa handlePlaceBid để có loading states như profile
     const handlePlaceBid = async() => {
         if (!selectedAuction || !bidAmount || !address) 
             return
 
         try {
+            // ✅ Set loading states
+            setIsBiddingOnAuction(selectedAuction.auctionId.toString())
+            setBidTransactionStatus('pending')
+            
             const bidAmountWei = parseEther(bidAmount)
 
             // Validate bid amount
             if (bidAmountWei < selectedAuction.startingPrice) {
                 toast({title: "❌ Invalid Bid", description: "Bid amount must be at least the starting price.", variant: "destructive"})
+                // ✅ Reset loading states on error
+                setIsBiddingOnAuction(null)
+                setBidTransactionStatus('idle')
                 return
             }
 
-            // ✅ Sealed bid logic: 
-            // - bidAmount = user input (ví dụ 10 ROSE) - bid thực tế
-            // - startingPrice = deposit (ví dụ 5 ROSE) - chỉ trả deposit
             const txHash = await placeBid(
                 parseInt(selectedAuction.auctionId.toString()), 
-                bidAmount, // ✅ Bid amount thực tế (10 ROSE)
-                formatEther(selectedAuction.startingPrice) // ✅ Deposit = starting price (5 ROSE)
+                bidAmount,
+                formatEther(selectedAuction.startingPrice)
             )
 
             // ✅ Track pending bid for database update
@@ -198,6 +229,9 @@ export default function AuctionsPage() {
 
         } catch (error) {
             console.error("Error placing bid:", error)
+            // ✅ Set error state
+            setBidTransactionStatus('error')
+            setIsBiddingOnAuction(null)
             toast({title: "❌ Bid Failed", description: "Failed to place bid. Please try again.", variant: "destructive"})
         }
     }
@@ -359,46 +393,41 @@ export default function AuctionsPage() {
 
     // ✅ Xóa handleRevealBid và handleEnablePublicHistory vì không tồn tại trong contract
 
-    // ✅ Thêm handleClaimNFT cho winner
+    // ✅ Thêm handleClaimNFT với loading states
     const handleClaimNFT = async(auctionId: string, remainingAmount: string) => {
+        if (!address) {
+            toast({
+                title: "❌ Wallet Not Connected",
+                description: "Please connect your wallet to claim NFT.",
+                variant: "destructive"
+            })
+            return
+        }
+
         try {
-            // ✅ Chỉ truyền auctionId, không cần remainingAmount
+            // ✅ Set loading states
+            setIsClaimingNFT(auctionId)
+            setClaimTransactionStatus('pending')
+            
             const txHash = await claimNFT(parseInt(auctionId), remainingAmount)
             
+            // ✅ Track pending claim for database update
+            pendingClaimRef.current = {
+                auctionId,
+                remainingAmount,
+                txHash
+            }
+
             toast({
                 title: "⏳ Claiming NFT",
                 description: "Transaction submitted. Please wait for confirmation...",
             })
             
-            // Wait for confirmation
-            let confirmed = false
-            const maxAttempts = 30
-            let attempts = 0
-            
-            while (!confirmed && attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 2000))
-                attempts++
-                
-                if (isConfirmed) {
-                    confirmed = true
-                }
-            }
-
-            if (confirmed) {
-                toast({
-                    title: "✅ NFT Claimed",
-                    description: "You have successfully claimed your NFT!",
-                })
-
-                refetch()
-            } else {
-                toast({
-                    title: "⚠️ Transaction Pending",
-                    description: "Transaction submitted but confirmation is taking longer than expected.",
-                })
-            }
         } catch (error) {
             console.error('❌ Error claiming NFT:', error)
+            // ✅ Set error state
+            setClaimTransactionStatus('error')
+            setIsClaimingNFT(null)
             toast({
                 title: "❌ Claim Failed",
                 description: error instanceof Error ? error.message : "Failed to claim NFT",
@@ -407,46 +436,40 @@ export default function AuctionsPage() {
         }
     }
 
-    // ✅ Thêm handleReclaimNFT cho seller
+    // ✅ Thêm handleReclaimNFT với loading states
     const handleReclaimNFT = async(auctionId: string) => {
+        if (!address) {
+            toast({
+                title: "❌ Wallet Not Connected",
+                description: "Please connect your wallet to reclaim NFT.",
+                variant: "destructive"
+            })
+            return
+        }
+
         try {
+            // ✅ Set loading states
+            setIsReclaimingNFT(auctionId)
+            setReclaimTransactionStatus('pending')
+            
             const txHash = await reclaimNFT(parseInt(auctionId))
+            
+            // ✅ Track pending reclaim for database update
+            pendingReclaimRef.current = {
+                auctionId,
+                txHash
+            }
             
             toast({
                 title: "⏳ Reclaiming NFT",
                 description: "Transaction submitted. Please wait for confirmation...",
             })
             
-            // Wait for confirmation
-            let confirmed = false
-            const maxAttempts = 30
-            let attempts = 0
-            
-            while (!confirmed && attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 2000))
-                attempts++
-                
-                if (isConfirmed) {
-                    confirmed = true
-                }
-            }
-
-            if (confirmed) {
-                toast({
-                    title: "✅ NFT Reclaimed",
-                    description: "You have successfully reclaimed your NFT!",
-                })
-                
-                // Refresh auction data
-                refetch()
-            } else {
-                toast({
-                    title: "⚠️ Transaction Pending",
-                    description: "Transaction submitted but confirmation is taking longer than expected.",
-                })
-            }
         } catch (error) {
             console.error('❌ Error reclaiming NFT:', error)
+            // ✅ Set error state
+            setReclaimTransactionStatus('error')
+            setIsReclaimingNFT(null)
             toast({
                 title: "❌ Reclaim Failed",
                 description: error instanceof Error ? error.message : "Failed to reclaim NFT",
@@ -491,6 +514,128 @@ export default function AuctionsPage() {
     // ✅ Check if auction can be cancelled
     const canCancelAuction = (auction : ProcessedAuction) => {
         return isUserSeller(auction) && auction.isActive && auction.totalBids === BigInt(0)
+    }
+
+    // ✅ Render success popup cho claim NFT
+    const renderClaimSuccessPopup = (auctionId: string) => {
+        const isCurrentAuctionSuccess = successfulClaimAuctionId === auctionId && claimTransactionStatus === 'success'
+        
+        if (!isCurrentAuctionSuccess || !lastClaimTransactionHash) return null
+
+        return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <Card className="max-w-md w-full mx-4 relative">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                            setClaimTransactionStatus('idle')
+                            setLastClaimTransactionHash('')
+                            setSuccessfulClaimAuctionId(null)
+                        }}
+                    >
+                        <X className="w-4 h-4" />
+                    </Button>
+                    <CardContent className="p-6 text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="w-8 h-8 text-green-600" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-2">NFT Claimed Successfully! 🎉</h3>
+                        <p className="text-muted-foreground mb-4">
+                            Congratulations! Your NFT has been successfully claimed and transferred to your wallet.
+                        </p>
+                        <div className="bg-muted p-3 rounded mb-4">
+                            <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
+                            <p className="text-sm font-medium break-all">{lastClaimTransactionHash}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1"
+                                onClick={() => {
+                                    window.open(`https://testnet.explorer.sapphire.oasis.dev/tx/${lastClaimTransactionHash}`, "_blank")
+                                }}
+                            >
+                                <ExternalLink className="w-4 h-4 mr-2" />
+                                View on Explorer
+                            </Button>
+                            <Button 
+                                className="flex-1"
+                                onClick={() => {
+                                    setClaimTransactionStatus('idle')
+                                    setLastClaimTransactionHash('')
+                                    setSuccessfulClaimAuctionId(null)
+                                }}
+                            >
+                                Close
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
+    // ✅ Render success popup cho reclaim NFT
+    const renderReclaimSuccessPopup = (auctionId: string) => {
+        const isCurrentAuctionSuccess = successfulReclaimAuctionId === auctionId && reclaimTransactionStatus === 'success'
+        
+        if (!isCurrentAuctionSuccess || !lastReclaimTransactionHash) return null
+
+        return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <Card className="max-w-md w-full mx-4 relative">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                            setReclaimTransactionStatus('idle')
+                            setLastReclaimTransactionHash('')
+                            setSuccessfulReclaimAuctionId(null)
+                        }}
+                    >
+                        <X className="w-4 h-4" />
+                    </Button>
+                    <CardContent className="p-6 text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-2">NFT Reclaimed Successfully! 🎉</h3>
+                        <p className="text-muted-foreground mb-4">
+                            Your NFT has been successfully reclaimed and returned to your wallet.
+                        </p>
+                        <div className="bg-muted p-3 rounded mb-4">
+                            <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
+                            <p className="text-sm font-medium break-all">{lastReclaimTransactionHash}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1"
+                                onClick={() => {
+                                    window.open(`https://testnet.explorer.sapphire.oasis.dev/tx/${lastReclaimTransactionHash}`, "_blank")
+                                }}
+                            >
+                                <ExternalLink className="w-4 h-4 mr-2" />
+                                View on Explorer
+                            </Button>
+                            <Button 
+                                className="flex-1"
+                                onClick={() => {
+                                    setReclaimTransactionStatus('idle')
+                                    setLastReclaimTransactionHash('')
+                                    setSuccessfulReclaimAuctionId(null)
+                                }}
+                            >
+                                Close
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )
     }
 
     // ✅ Render cancel auction dialog
@@ -622,185 +767,318 @@ export default function AuctionsPage() {
         )
     }
 
-    // ✅ Render bid dialog (for regular bidders)
-    const renderBidDialog = (auction: ProcessedAuction) => {
+const renderBidDialog = (auction: ProcessedAuction) => {
         const hasUserBid = Boolean(auction.userBid && BigInt(auction.userBid.amount) > BigInt(0))
         const userBidAmount = hasUserBid
             ? formatEther(BigInt(auction.userBid!.amount))
             : "0"
+        
+        // ✅ Check loading states
+        const isCurrentAuctionBidding = isBiddingOnAuction === auction.auctionId.toString()
+        const isCurrentAuctionSelected = selectedAuction?.auctionId.toString() === auction.auctionId.toString()
+        const isCurrentAuctionSuccess = successfulBidAuctionId === auction.auctionId.toString() && bidTransactionStatus === 'success'
 
         return (
-            <Dialog
-                open={selectedAuction?.auctionId.toString() === auction.auctionId.toString()}
-                onOpenChange={(open) => {
-                if (!open) {
-                    setSelectedAuction(null);
-                    setBidAmount("");
-                    setIsUpdatingBid(false);
-                }
-            }}>
-                <DialogTrigger asChild>
-                    <Button
-                        className="w-full"
-                        onClick={() => {
-                        setSelectedAuction(auction);
+            <>
+                {/* ✅ Success Popup for Bid */}
+                {isCurrentAuctionSuccess && lastBidTransactionHash && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                        <Card className="max-w-md w-full mx-4 relative">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-2 right-2"
+                                onClick={() => {
+                                    setBidTransactionStatus('idle')
+                                    setLastBidTransactionHash('')
+                                    setSuccessfulBidAuctionId(null)
+                                    setIsBiddingOnAuction(null)
+                                }}
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                            <CardContent className="p-6 text-center">
+                                <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                                    <CheckCircle className="w-8 h-8 text-green-600" />
+                                </div>
+                                <h3 className="text-lg font-semibold mb-2">Sealed Bid Submitted Successfully! 🎉</h3>
+                                <p className="text-muted-foreground mb-4">
+                                    Your sealed bid has been confirmed and recorded on the blockchain. It will remain hidden until the auction ends.
+                                </p>
+                                <div className="bg-muted p-3 rounded mb-4">
+                                    <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
+                                    <p className="text-sm font-medium break-all">{lastBidTransactionHash}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        variant="outline" 
+                                        className="flex-1"
+                                        onClick={() => {
+                                            window.open(`https://testnet.explorer.sapphire.oasis.dev/tx/${lastBidTransactionHash}`, "_blank")
+                                        }}
+                                    >
+                                        <ExternalLink className="w-4 h-4 mr-2" />
+                                        View on Explorer
+                                    </Button>
+                                    <Button 
+                                        className="flex-1"
+                                        onClick={() => {
+                                            // ✅ Reset để bid again
+                                            setBidTransactionStatus('idle')
+                                            setLastBidTransactionHash('')
+                                            setSuccessfulBidAuctionId(null)
+                                            setIsBiddingOnAuction(null)
+                                            setBidAmount("")
+                                        }}
+                                    >
+                                        Place Another Bid
+                                    </Button>
+                                </div>
+                                <div className="mt-2">
+                                    <Button 
+                                        variant="outline" 
+                                        className="w-full"
+                                        onClick={() => {
+                                            setBidTransactionStatus('idle')
+                                            setLastBidTransactionHash('')
+                                            setSuccessfulBidAuctionId(null)
+                                            setIsBiddingOnAuction(null)
+                                            setSelectedAuction(null)
+                                            setBidAmount("")
+                                        }}
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* ✅ Main Dialog - ẩn khi success */}
+                <Dialog
+                    open={isCurrentAuctionSelected && !isCurrentAuctionSuccess}
+                    onOpenChange={(open) => {
+                    if (!open) {
+                        setSelectedAuction(null);
                         setBidAmount("");
-                        setIsUpdatingBid(hasUserBid);
-                    }}
-                        disabled={!auction.userCanBid || !isConnected || !!isUserSeller(auction)}>
-                        <Lock className="w-4 h-4 mr-2"/> {hasUserBid
-                            ? "Update Sealed Bid"
-                            : "Submit Sealed Bid"}
-                    </Button>
-                </DialogTrigger>
+                        setIsUpdatingBid(false);
+                        // ✅ Reset bid states khi đóng dialog
+                        if (!isCurrentAuctionSuccess) {
+                            setBidTransactionStatus('idle')
+                            setIsBiddingOnAuction(null)
+                        }
+                    }
+                }}>
+                    <DialogTrigger asChild>
+                        <Button
+                            className="w-full"
+                            onClick={() => {
+                            setSelectedAuction(auction);
+                            setBidAmount("");
+                            setIsUpdatingBid(hasUserBid);
+                            // ✅ Reset states khi mở dialog mới
+                            setBidTransactionStatus('idle')
+                            setSuccessfulBidAuctionId(null)
+                        }}
+                            disabled={!auction.userCanBid || !isConnected || !!isUserSeller(auction)}>
+                            <Lock className="w-4 h-4 mr-2"/> {hasUserBid
+                                ? "Update Sealed Bid"
+                                : "Submit Sealed Bid"}
+                        </Button>
+                    </DialogTrigger>
 
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {hasUserBid
-                                ? "Update"
-                                : "Submit"}
-                            Sealed Bid
-                        </DialogTitle>
-                        <DialogDescription>
-                            Your bid will be hidden until the auction ends. {hasUserBid && "You can increase your bid anytime."}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                        {/* NFT Info */}
-                        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                            <div className="w-16 h-16 relative">
-                                <Image
-                                    src={auction.nftMetadata
-                                    ?.image || '/placeholder.svg'}
-                                    alt={auction.title}
-                                    fill
-                                    className="object-cover rounded"/>
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="font-semibold">{auction.title}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    Starting: {formatEther(auction.startingPrice)}
-                                    ROSE
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    Time left: {formatTimeRemaining(auction.timeRemaining)}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Current bid info */}
-                        {hasUserBid && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Lock className="w-4 h-4 text-blue-600"/>
-                                    <span className="font-medium text-blue-900">Your Current Bid</span>
-                                </div>
-                                <div className="text-lg font-bold text-blue-900">{userBidAmount}
-                                    ROSE</div>
-                                <p className="text-xs text-blue-700">This bid is hidden from other participants</p>
-                            </div>
-                        )}
-
-                        {/* Warning */}
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0"/>
-                                <div>
-                                    <h4 className="font-medium text-yellow-900 mb-1">Important</h4>
-                                    <ul className="text-sm text-yellow-700 space-y-1">
-                                        <li>• Your bid amount will remain completely hidden</li>
-                                        <li>• You can update your bid anytime before auction ends</li>
-                                        <li>• Only pay if you win (deposits are automatically refunded)</li>
-                                        <li>• Winner pays their exact bid amount</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Bid input */}
-                        <div>
-                            <Label htmlFor="bid-amount">
+                    <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>
                                 {hasUserBid
-                                    ? "New Bid Amount (ROSE)"
-                                    : "Your Bid Amount (ROSE)"}
-                            </Label>
-                            <Input
-                                id="bid-amount"
-                                type="number"
-                                step="0.001"
-                                placeholder={hasUserBid
-                                ? `Higher than ${userBidAmount}`
-                                : "Enter your bid"}
-                                value={bidAmount}
-                                onChange={(e) => setBidAmount(e.target.value)}
-                                disabled={isPending || isConfirming}/>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Minimum: {formatEther(auction.startingPrice)}
-                                ROSE {hasUserBid && ` | Must be higher than ${userBidAmount} ROSE`}
-                            </p>
-                        </div>
+                                    ? "Update"
+                                    : "Submit"}
+                                Sealed Bid
+                            </DialogTitle>
+                            <DialogDescription>
+                                Your bid will be hidden until the auction ends. {hasUserBid && "You can increase your bid anytime."}
+                            </DialogDescription>
+                        </DialogHeader>
 
-                        {/* Auction stats */}
-                        <div className="bg-muted rounded-lg p-3">
-                            <h4 className="font-medium mb-2">Auction Stats</h4>
-                            <div className="grid grid-cols-3 gap-3 text-sm">
-                                <div>
-                                    <span className="text-muted-foreground">Total Bids:</span>
-                                    <div className="font-semibold">{auction
-                                            .totalBids
-                                            .toString()}</div>
+                        <div className="space-y-4">
+                            {/* NFT Info */}
+                            <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                                <div className="w-16 h-16 relative">
+                                    <Image
+                                        src={auction.nftMetadata
+                                        ?.image || '/placeholder.svg'}
+                                        alt={auction.title}
+                                        fill
+                                        className="object-cover rounded"/>
                                 </div>
-                                <div>
-                                    <span className="text-muted-foreground">Bidders:</span>
-                                    <div className="font-semibold">{auction
-                                            .uniqueBidders
-                                            .toString()}</div>
+                                <div className="flex-1">
+                                    <h3 className="font-semibold">{auction.title}</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Starting: {formatEther(auction.startingPrice)}
+                                        ROSE
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Time left: {formatTimeRemaining(auction.timeRemaining)}
+                                    </p>
                                 </div>
-                                <div>
-                                    <span className="text-muted-foreground">Time Left:</span>
-                                    <div className="font-semibold text-orange-600">
-                                        {formatTimeRemaining(auction.timeRemaining)}
+                            </div>
+
+                            {/* Current bid info */}
+                            {hasUserBid && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Lock className="w-4 h-4 text-blue-600"/>
+                                        <span className="font-medium text-blue-900">Your Current Bid</span>
+                                    </div>
+                                    <div className="text-lg font-bold text-blue-900">{userBidAmount}
+                                        ROSE</div>
+                                    <p className="text-xs text-blue-700">This bid is hidden from other participants</p>
+                                </div>
+                            )}
+
+                            {/* Warning */}
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                <div className="flex items-start gap-3">
+                                    <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0"/>
+                                    <div>
+                                        <h4 className="font-medium text-yellow-900 mb-1">Important</h4>
+                                        <ul className="text-sm text-yellow-700 space-y-1">
+                                            <li>• Your bid amount will remain completely hidden</li>
+                                            <li>• You can update your bid anytime before auction ends</li>
+                                            <li>• Only pay if you win (deposits are automatically refunded)</li>
+                                            <li>• Winner pays their exact bid amount</li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Action buttons */}
-                        <div className="flex gap-2">
-                            <Button
-                                onClick={handlePlaceBid}
-                                disabled={!bidAmount || parseFloat(bidAmount) <= 0 || isPending || isConfirming || (hasUserBid && parseFloat(bidAmount) <= parseFloat(userBidAmount))}
-                                className="flex-1">
-                                {isPending || isConfirming
-                                    ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 animate-spin mr-2"/>
-                                            {isPending ? "Confirm in Wallet..." : "Processing..."}
-                                        </>
-                                    )
-                                    : (
-                                        <>
-                                            <Lock className="w-4 h-4 mr-2"/>
-                                            {hasUserBid ? "Update Bid" : "Submit Bid"}
-                                        </>
-                                    )}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                setSelectedAuction(null);
-                                setBidAmount("");
-                                setIsUpdatingBid(false);
-                            }}
-                                className="flex-1">
-                                Cancel
-                            </Button>
+                            {/* Bid input */}
+                            <div>
+                                <Label htmlFor="bid-amount">
+                                    {hasUserBid
+                                        ? "New Bid Amount (ROSE)"
+                                        : "Your Bid Amount (ROSE)"}
+                                </Label>
+                                <Input
+                                    id="bid-amount"
+                                    type="number"
+                                    step="0.001"
+                                    placeholder={hasUserBid
+                                    ? `Higher than ${userBidAmount}`
+                                    : "Enter your bid"}
+                                    value={bidAmount}
+                                    onChange={(e) => setBidAmount(e.target.value)}
+                                    disabled={isCurrentAuctionBidding || isPending || isConfirming}/>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Minimum: {formatEther(auction.startingPrice)}
+                                    ROSE {hasUserBid && ` | Must be higher than ${userBidAmount} ROSE`}
+                                </p>
+                            </div>
+
+                            {/* ✅ Loading/Processing State Display */}
+                            {bidTransactionStatus !== 'idle' && isCurrentAuctionBidding && (
+                                <div className={`p-3 rounded-lg border ${
+                                    bidTransactionStatus === 'success' ? 'bg-green-50 border-green-200' : 
+                                    bidTransactionStatus === 'error' ? 'bg-red-50 border-red-200' :
+                                    'bg-blue-50 border-blue-200'
+                                }`}>
+                                    <div className={`flex items-center gap-2 ${
+                                        bidTransactionStatus === 'success' ? 'text-green-700' : 
+                                        bidTransactionStatus === 'error' ? 'text-red-700' :
+                                        'text-blue-700'
+                                    }`}>
+                                        {bidTransactionStatus === 'success' ? (
+                                            <CheckCircle className="h-4 w-4" />
+                                        ) : bidTransactionStatus === 'error' ? (
+                                            <AlertCircle className="h-4 w-4" />
+                                        ) : (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        )}
+                                        <span className="text-sm font-medium">
+                                            {bidTransactionStatus === 'pending' ? 'Submitting sealed bid...' : 
+                                             bidTransactionStatus === 'confirming' ? 'Confirming on blockchain...' : 
+                                             bidTransactionStatus === 'success' ? 'Sealed bid submitted successfully!' :
+                                             bidTransactionStatus === 'error' ? 'Failed to submit bid' :
+                                             'Processing bid...'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Auction stats */}
+                            <div className="bg-muted rounded-lg p-3">
+                                <h4 className="font-medium mb-2">Auction Stats</h4>
+                                <div className="grid grid-cols-3 gap-3 text-sm">
+                                    <div>
+                                        <span className="text-muted-foreground">Total Bids:</span>
+                                        <div className="font-semibold">{auction
+                                                .totalBids
+                                                .toString()}</div>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Bidders:</span>
+                                        <div className="font-semibold">{auction
+                                                .uniqueBidders
+                                                .toString()}</div>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Time Left:</span>
+                                        <div className="font-semibold text-orange-600">
+                                            {formatTimeRemaining(auction.timeRemaining)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={handlePlaceBid}
+                                    disabled={
+                                        !bidAmount || 
+                                        parseFloat(bidAmount) <= 0 || 
+                                        isCurrentAuctionBidding || 
+                                        isPending || 
+                                        isConfirming || 
+                                        (hasUserBid && parseFloat(bidAmount) <= parseFloat(userBidAmount))
+                                    }
+                                    className="flex-1">
+                                    {isCurrentAuctionBidding || isPending || isConfirming
+                                        ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2"/>
+                                                {bidTransactionStatus === 'pending' ? "Confirm in Wallet..." : 
+                                                 bidTransactionStatus === 'confirming' ? "Processing..." :
+                                                 isPending ? "Confirm in Wallet..." : "Processing..."}
+                                            </>
+                                        )
+                                        : (
+                                            <>
+                                                <Lock className="w-4 h-4 mr-2"/>
+                                                {hasUserBid ? "Update Bid" : "Submit Bid"}
+                                            </>
+                                        )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                    setSelectedAuction(null);
+                                    setBidAmount("");
+                                    setIsUpdatingBid(false);
+                                    // ✅ Reset bid states
+                                    setBidTransactionStatus('idle')
+                                    setIsBiddingOnAuction(null)
+                                }}
+                                    className="flex-1"
+                                    disabled={isCurrentAuctionBidding && bidTransactionStatus === 'pending'}>
+                                    Cancel
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    </DialogContent>
+                </Dialog>
+            </>
         )
     }
 
@@ -942,12 +1220,21 @@ export default function AuctionsPage() {
         const isWinner = auction.isFinalized && auction.highestBidder
             ?.toLowerCase() === address?.toLowerCase()
         const isSeller = isUserSeller(auction)
+        
+        // ✅ Check loading states
+        const isCurrentAuctionClaiming = isClaimingNFT === auction.auctionId.toString()
+        const isCurrentAuctionReclaiming = isReclaimingNFT === auction.auctionId.toString()
 
         return (
-            <Card
-                key={auction.auctionId.toString()}
-                className="overflow-hidden hover:shadow-lg transition-shadow"
-            >
+            <>
+                {/* ✅ Success Popups */}
+                {renderClaimSuccessPopup(auction.auctionId.toString())}
+                {renderReclaimSuccessPopup(auction.auctionId.toString())}
+
+                <Card
+                    key={auction.auctionId.toString()}
+                    className="overflow-hidden hover:shadow-lg transition-shadow"
+                >
                 <Link href={`/auctions/${auction.auctionId.toString()}`} className="block">
                     <div className="aspect-square relative cursor-pointer">
                         <Image
@@ -1187,25 +1474,25 @@ export default function AuctionsPage() {
                                         if (!open) setShowBidHistory(null)
                                     }}
                                     onTrigger={() => setShowBidHistory(auction.auctionId.toString())}
-                                    onClaimNFT={handleClaimNFT} // ✅ Thêm prop
-                                    isPending={isPending}
-                                    isConfirming={isConfirming}
+                                    onClaimNFT={handleClaimNFT}
+                                    isPending={isCurrentAuctionClaiming && claimTransactionStatus === 'pending'}
+                                    isConfirming={isCurrentAuctionClaiming && claimTransactionStatus === 'confirming'}
                                     userAddress={address}
                                 />
                                 
-                                {/* ✅ Xóa nút Claim NFT ở ngoài vì đã có trong dialog */}
-                                
-                                {/* ✅ Thêm Reclaim NFT button cho seller */}
+                                {/* ✅ Thêm Reclaim NFT button cho seller với loading states */}
                                 {isSeller && !isWinner && (
                                     <Button
                                         variant="outline"
                                         onClick={() => handleReclaimNFT(auction.auctionId.toString())}
-                                        disabled={isPending || isConfirming}
+                                        disabled={isCurrentAuctionReclaiming || isPending || isConfirming}
                                         className="w-full">
-                                        {isPending || isConfirming ? (
+                                        {isCurrentAuctionReclaiming || (isPending && isReclaimingNFT === auction.auctionId.toString()) || (isConfirming && isReclaimingNFT === auction.auctionId.toString()) ? (
                                             <>
                                                 <Loader2 className="w-4 h-4 animate-spin mr-2"/>
-                                                Reclaiming...
+                                                {reclaimTransactionStatus === 'pending' ? "Confirm in Wallet..." : 
+                                                 reclaimTransactionStatus === 'confirming' ? "Processing..." :
+                                                 "Reclaiming..."}
                                             </>
                                         ) : (
                                             <>
@@ -1225,69 +1512,137 @@ export default function AuctionsPage() {
                     </div>
                 </CardContent>
             </Card>
+            </>
         )
     }
 
+    // ✅ Update useEffect để handle claim/reclaim transaction states
+    useEffect(() => {
+        if (isPending && isBiddingOnAuction) {
+            setBidTransactionStatus('pending')
+        } else if (isConfirming && isBiddingOnAuction) {
+            setBidTransactionStatus('confirming')
+        }
+
+        if (isPending && isClaimingNFT) {
+            setClaimTransactionStatus('pending')
+        } else if (isConfirming && isClaimingNFT) {
+            setClaimTransactionStatus('confirming')
+        }
+
+        if (isPending && isReclaimingNFT) {
+            setReclaimTransactionStatus('pending')
+        } else if (isConfirming && isReclaimingNFT) {
+            setReclaimTransactionStatus('confirming')
+        }
+    }, [isPending, isConfirming, isBiddingOnAuction, isClaimingNFT, isReclaimingNFT])
     // ✅ Thêm useEffect để xử lý cancel confirmation
     useEffect(() => {
-        if (isConfirmed && hash && pendingCancelRef.current && pendingCancelRef.current.txHash === hash) {
-            const { auctionId, txHash } = pendingCancelRef.current
-            
-            // Avoid duplicate DB calls
-            if (!processedCancelTx.current.has(txHash)) {
-                processedCancelTx.current.add(txHash)
+        if (isConfirmed && hash && !processedConfirmTx.current.has(hash)) {
+            processedConfirmTx.current.add(hash)
+
+            // ✅ Check if this is a bid transaction
+            if (pendingBidRef.current && pendingBidRef.current.txHash === hash) {
+                const { auctionId, bidAmount, bidderAddress, txHash } = pendingBidRef.current
                 
-                // ✅ Sửa updateAuctionStateDb để gọi đúng endpoint
-                const updateAuctionStateDb = async (auctionId: string, state: string, txHash?: string) => {
+                // ✅ Set success states
+                setBidTransactionStatus('success')
+                setLastBidTransactionHash(txHash)
+                setSuccessfulBidAuctionId(auctionId)
+                
+                // ✅ Update database with bid information
+                const updateBidInDatabase = async () => {
                     try {
-                        const response = await fetch('/api/auctions/update-state', {
-                            method: 'PUT',
+                        console.log('🔄 Updating bid in database:', { auctionId, bidderAddress, bidAmount })
+                        
+                        const response = await fetch('/api/auctions/bids', {
+                            method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                             },
                             body: JSON.stringify({
                                 auctionId,
-                                state,
+                                bidderAddress,
+                                bidAmount,
                                 txHash
                             })
                         })
 
                         if (!response.ok) {
-                            throw new Error(`Failed to update auction state: ${response.status}`)
+                            const errorText = await response.text()
+                            console.error('❌ Bid update failed:', errorText)
+                            throw new Error(`Failed to update bid: ${response.status}`)
                         }
 
                         const result = await response.json()
-                        console.log('✅ Auction state updated in DB:', result)
-                        return result
-
+                        console.log('✅ Bid updated in database:', result)
+                        
+                        // ✅ Toast với transaction details
+                        toast({
+                            title: "✅ Sealed Bid Confirmed!",
+                            description: (
+                                <div className="space-y-2">
+                                    <p>Your sealed bid has been confirmed and recorded on the blockchain.</p>
+                                    <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                                        Tx: {txHash.slice(0, 10)}...{txHash.slice(-6)}
+                                    </div>
+                                    <a
+                                        href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 hover:underline text-xs block"
+                                    >
+                                        View on Explorer →
+                                    </a>
+                                </div>
+                            ),
+                            duration: 15000
+                        })
+                        
+                        // Refresh auction data
+                        refetch()
+                        
                     } catch (error) {
-                        console.error('❌ Failed to update auction state in DB:', error)
-                        throw error
+                        console.error('❌ Failed to update bid in database:', error)
+                        toast({
+                            title: "⚠️ Database Update Failed",
+                            description: "Bid confirmed on blockchain but database update failed.",
+                            variant: "destructive"
+                        })
                     }
                 }
 
-                updateAuctionStateDb(auctionId, 'CANCELLED', txHash).then(() => {
-                    console.log('✅ Auction cancelled in database:', auctionId)
-                    pendingCancelRef.current = null
-                    
-                    // Refresh auction data
-                    refetch()
-                    
-                    toast({
-                        title: "✅ Auction Cancelled",
-                        description: "Auction has been successfully cancelled on blockchain and database.",
-                    })
-                }).catch((error) => {
-                    console.error('❌ Failed to update database for cancelled auction:', error)
-                    toast({
-                        title: "⚠️ Database Update Failed",
-                        description: "Auction cancelled on blockchain but database update failed.",
-                        variant: "destructive"
-                    })
+                updateBidInDatabase()
+                pendingBidRef.current = null
+            } else {
+                // ✅ Handle other successful transactions
+                toast({
+                    title: "✅ Transaction Successful", 
+                    description: (
+                        <div className="space-y-2">
+                            <p>Your transaction has been confirmed on the blockchain.</p>
+                            <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                                Tx: {hash.slice(0, 10)}...{hash.slice(-6)}
+                            </div>
+                            <a
+                                href={`https://testnet.explorer.sapphire.oasis.dev/tx/${hash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline text-xs block"
+                            >
+                                View on Explorer →
+                            </a>
+                        </div>
+                    ),
+                    duration: 15000
                 })
+
+                refetch()
+                setShowCancelDialog(null)
+                setCancelReason("")
             }
         }
-    }, [isConfirmed, hash, refetch])
+    }, [isConfirmed, hash, refetch, address])
 
     // ✅ Thêm useEffect để xử lý successful transactions
     useEffect(() => {
@@ -1297,6 +1652,11 @@ export default function AuctionsPage() {
             // ✅ Check if this is a bid transaction
             if (pendingBidRef.current && pendingBidRef.current.txHash === hash) {
                 const { auctionId, bidAmount, bidderAddress, txHash } = pendingBidRef.current
+                
+                // ✅ Set success states
+                setBidTransactionStatus('success')
+                setLastBidTransactionHash(txHash)
+                setSuccessfulBidAuctionId(auctionId)
                 
                 // ✅ Update database with bid information
                 const updateBidInDatabase = async () => {
@@ -1347,10 +1707,6 @@ export default function AuctionsPage() {
                             duration: 15000
                         })
                         
-                        // ✅ KHÔNG reset dialog - giữ dialog mở
-                        // setSelectedAuction(null)
-                        // setBidAmount("")
-                        
                         // Refresh auction data
                         refetch()
                         
@@ -1366,6 +1722,110 @@ export default function AuctionsPage() {
 
                 updateBidInDatabase()
                 pendingBidRef.current = null
+            }
+            // ✅ Check if this is a claim transaction
+            else if (pendingClaimRef.current && pendingClaimRef.current.txHash === hash) {
+                const { auctionId, remainingAmount, txHash } = pendingClaimRef.current
+                
+                // ✅ Set success states
+                setClaimTransactionStatus('success')
+                setLastClaimTransactionHash(txHash)
+                setSuccessfulClaimAuctionId(auctionId)
+                setIsClaimingNFT(null)
+                
+                // ✅ Update database with claim information
+                const updateClaimInDatabase = async () => {
+                    try {
+                        console.log('🔄 Updating claim in database:', { auctionId, txHash })
+                        
+                        const response = await fetch('/api/auctions/claim', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                auctionId,
+                                claimerAddress: address,
+                                txHash
+                            })
+                        })
+
+                        if (!response.ok) {
+                            const errorText = await response.text()
+                            console.error('❌ Claim update failed:', errorText)
+                            throw new Error(`Failed to update claim: ${response.status}`)
+                        }
+
+                        const result = await response.json()
+                        console.log('✅ Claim updated in database:', result)
+                        
+                        // Refresh auction data
+                        refetch()
+                        
+                    } catch (error) {
+                        console.error('❌ Failed to update claim in database:', error)
+                        toast({
+                            title: "⚠️ Database Update Failed",
+                            description: "NFT claimed on blockchain but database update failed.",
+                            variant: "destructive"
+                        })
+                    }
+                }
+
+                updateClaimInDatabase()
+                pendingClaimRef.current = null
+            }
+            // ✅ Check if this is a reclaim transaction
+            else if (pendingReclaimRef.current && pendingReclaimRef.current.txHash === hash) {
+                const { auctionId, txHash } = pendingReclaimRef.current
+                
+                // ✅ Set success states
+                setReclaimTransactionStatus('success')
+                setLastReclaimTransactionHash(txHash)
+                setSuccessfulReclaimAuctionId(auctionId)
+                setIsReclaimingNFT(null)
+                
+                // ✅ Update database with reclaim information
+                const updateReclaimInDatabase = async () => {
+                    try {
+                        console.log('🔄 Updating reclaim in database:', { auctionId, txHash })
+                        
+                        const response = await fetch('/api/auctions/reclaim', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                auctionId,
+                                reclaimerAddress: address,
+                                txHash
+                            })
+                        })
+
+                        if (!response.ok) {
+                            const errorText = await response.text()
+                            console.error('❌ Reclaim update failed:', errorText)
+                            throw new Error(`Failed to update reclaim: ${response.status}`)
+                        }
+
+                        const result = await response.json()
+                        console.log('✅ Reclaim updated in database:', result)
+                        
+                        // Refresh auction data
+                        refetch()
+                        
+                    } catch (error) {
+                        console.error('❌ Failed to update reclaim in database:', error)
+                        toast({
+                            title: "⚠️ Database Update Failed",
+                            description: "NFT reclaimed on blockchain but database update failed.",
+                            variant: "destructive"
+                        })
+                    }
+                }
+
+                updateReclaimInDatabase()
+                pendingReclaimRef.current = null
             } else {
                 // ✅ Handle other successful transactions
                 toast({
@@ -1397,7 +1857,28 @@ export default function AuctionsPage() {
                 setCancelReason("")
             }
         }
-    }, [isConfirmed, hash, refetch])
+    }, [isConfirmed, hash, refetch, address])
+
+    // ✅ Thêm useEffect để xử lý errors cho claim/reclaim
+    useEffect(() => {
+        if (error) {
+            // ✅ Reset loading states on error
+            if (isClaimingNFT) {
+                setClaimTransactionStatus('error')
+                setIsClaimingNFT(null)
+            }
+            if (isReclaimingNFT) {
+                setReclaimTransactionStatus('error')
+                setIsReclaimingNFT(null)
+            }
+            
+            toast({
+                title: "❌ Transaction Failed",
+                description: error.message || "An error occurred during the transaction.",
+                variant: "destructive"
+            })
+        }
+    }, [error, isClaimingNFT, isReclaimingNFT])
 
     // ✅ Thêm useEffect để xử lý errors
     useEffect(() => {

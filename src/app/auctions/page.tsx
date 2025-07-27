@@ -1325,13 +1325,35 @@ export default function AuctionsPage() {
                         const result = await response.json()
                         console.log('✅ Bid updated in database:', result)
                         
+                        // ✅ Hiển thị thông báo thành công với txHash và giữ dialog mở
+                        toast({
+                            title: "✅ Sealed Bid Confirmed!",
+                            description: (
+                                <div className="space-y-2">
+                                    <p>Your sealed bid has been confirmed and recorded on the blockchain.</p>
+                                    <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                                        Tx: {txHash.slice(0, 10)}...{txHash.slice(-6)}
+                                    </div>
+                                    <a
+                                        href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 hover:underline text-xs block"
+                                    >
+                                        View on Explorer →
+                                    </a>
+                                </div>
+                            ),
+                            duration: 15000
+                        })
+                        
+                        // ✅ KHÔNG reset dialog - giữ dialog mở
+                        // setSelectedAuction(null)
+                        // setBidAmount("")
+                        
                         // Refresh auction data
                         refetch()
                         
-                        toast({
-                            title: "✅ Bid Confirmed",
-                            description: "Your sealed bid has been confirmed and recorded.",
-                        })
                     } catch (error) {
                         console.error('❌ Failed to update bid in database:', error)
                         toast({
@@ -1346,14 +1368,31 @@ export default function AuctionsPage() {
                 pendingBidRef.current = null
             } else {
                 // ✅ Handle other successful transactions
-                toast({title: "✅ Transaction Successful", description: "Your transaction has been confirmed on the blockchain."})
+                toast({
+                    title: "✅ Transaction Successful", 
+                    description: (
+                        <div className="space-y-2">
+                            <p>Your transaction has been confirmed on the blockchain.</p>
+                            <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                                Tx: {hash.slice(0, 10)}...{hash.slice(-6)}
+                            </div>
+                            <a
+                                href={`https://testnet.explorer.sapphire.oasis.dev/tx/${hash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline text-xs block"
+                            >
+                                View on Explorer →
+                            </a>
+                        </div>
+                    ),
+                    duration: 15000
+                })
 
                 // Refresh auction data once
                 refetch()
 
-                // Reset states
-                setSelectedAuction(null)
-                setBidAmount("")
+                // ✅ Reset states cho các transaction khác (không phải bid)
                 setShowCancelDialog(null)
                 setCancelReason("")
             }

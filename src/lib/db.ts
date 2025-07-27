@@ -506,6 +506,83 @@ export const listingQueries = {
       console.error('Error updating price smart:', error)
       throw error
     }
+  },
+
+  // Get featured collections (top 6 by engagement - likes + views)
+  async getFeaturedCollections(limit: number = 6) {
+    try {
+      const query = `
+        SELECT 
+          collection_name,
+          image,
+          bundle_price,
+          views_count,
+          likes_count,
+          (views_count + likes_count) as engagement_score,
+          COUNT(*) as items_count,
+          listing_id
+        FROM listings 
+        WHERE is_active = true 
+          AND collection_name IS NOT NULL 
+          AND collection_name != ''
+          AND is_bundle = true
+          AND bundle_price IS NOT NULL
+          AND bundle_price != ''
+        GROUP BY collection_name, image, bundle_price, views_count, likes_count, listing_id
+        ORDER BY (views_count + likes_count) DESC, views_count DESC
+        LIMIT $1
+      `
+      
+      const client = await pool.connect()
+      try {
+        const result = await client.query(query, [limit])
+        return result.rows
+      } finally {
+        client.release()
+      }
+    } catch (error) {
+      console.error('Error getting featured collections:', error)
+      throw error
+    }
+  },
+
+  // Get trending NFTs (top 4 by views + likes)
+  async getTrendingNFTs(limit: number = 4) {
+    try {
+      const query = `
+        SELECT 
+          listing_id,
+          nft_contract,
+          token_id,
+          seller,
+          price,
+          collection_name,
+          name,
+          image,
+          views_count,
+          likes_count,
+          (views_count + likes_count) as engagement_score,
+          created_at
+        FROM listings 
+        WHERE is_active = true 
+          AND is_bundle = false
+          AND price IS NOT NULL
+          AND price != ''
+        ORDER BY (views_count + likes_count) DESC, views_count DESC
+        LIMIT $1
+      `
+      
+      const client = await pool.connect()
+      try {
+        const result = await client.query(query, [limit])
+        return result.rows
+      } finally {
+        client.release()
+      }
+    } catch (error) {
+      console.error('Error getting trending NFTs:', error)
+      throw error
+    }
   }
 }
 

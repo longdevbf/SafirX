@@ -56,6 +56,11 @@ export default function MintCollectionPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadStep, setUploadStep] = useState<'idle' | 'uploading' | 'minting' | 'success' | 'error'>('idle')
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  // ✅ Thêm state để lưu số lượng NFTs đã mint
+  const [mintedNFTCount, setMintedNFTCount] = useState(0)
+  // ✅ Thêm state để track khi nào mới được hiện modal
+  const [shouldShowModal, setShouldShowModal] = useState(false)
 
   const { address, isConnected } = useWallet()
   const {
@@ -71,11 +76,17 @@ export default function MintCollectionPage() {
 
   // Watch for transaction confirmation
   React.useEffect(() => {
-    if (isConfirmed && hash) {
-      setUploadStep('success')
+    if (isConfirmed && hash && shouldShowModal && uploadStep === 'minting') { 
       console.log('✅ NFT Collection Minted Successfully! Transaction hash:', hash)
+      
+      // ✅ Delay 2 giây để đảm bảo transaction hoàn tất
+      setTimeout(() => {
+        setUploadStep('success')
+        setShowSuccessModal(true)
+        setShouldShowModal(false) // ✅ Reset flag
+      }, 2000) // ✅ Delay 2 giây
     }
-  }, [isConfirmed, hash, nftItems.length])
+  }, [isConfirmed, hash, shouldShowModal, uploadStep])
 
   React.useEffect(() => {
     if (contractError) {
@@ -260,11 +271,9 @@ export default function MintCollectionPage() {
         return `Uploading files to IPFS... (${Math.round(uploadProgress)}%)`
       case 'minting':
         return 'Minting NFT Collection...'
-      case 'success':
-        return 'NFT Collection created successfully!'
       case 'error':
         return 'Error occurred during creation'
-      default:
+      default: // ✅ idle hoặc success đều về idle message
         return `Ready to mint ${nftItems.length} NFTs`
     }
   }
@@ -303,6 +312,8 @@ export default function MintCollectionPage() {
     setIsUploading(true)
     setUploadStep('uploading')
     setUploadProgress(0)
+    setMintedNFTCount(nftItems.length)
+    setShouldShowModal(true) // ✅ Set flag khi bắt đầu mint
 
     try {
       console.log('🎨 Starting NFT Collection creation process...')
@@ -370,6 +381,8 @@ export default function MintCollectionPage() {
     } catch (error) {
       console.error('❌ Error creating NFT Collection:', error)
       setUploadStep('error')
+      setMintedNFTCount(0)
+      setShouldShowModal(false) // ✅ Reset flag khi lỗi
       toast({
         title: "Error creating NFT Collection",
         description: error instanceof Error ? error.message : "An unknown error occurred",
@@ -382,12 +395,35 @@ export default function MintCollectionPage() {
 
   // Reset form function
   const resetForm = () => {
+    // ✅ Clean up previews trước
+    nftItems.forEach(item => {
+      URL.revokeObjectURL(item.preview)
+    })
+    
+    // ✅ Reset tất cả states ngay lập tức
+    setShowSuccessModal(false)
     setNftItems([])
     setCollectionName("")
     setCollectionDescription("")
     setBaseExternalLink("")
     setUploadStep('idle')
     setUploadProgress(0)
+    setIsUploading(false)
+    setMintedNFTCount(0)
+    setShouldShowModal(false) // ✅ Reset flag
+    
+    // ✅ Reset file input
+    const fileInput = document.getElementById('collection-files') as HTMLInputElement
+    if (fileInput) {
+      fileInput.value = ''
+    }
+    
+    console.log('✅ Form reset successfully')
+    
+    toast({
+      title: "Form Reset",
+      description: "Ready to create a new collection",
+    })
   }
 
   return (
@@ -397,21 +433,30 @@ export default function MintCollectionPage() {
           <div>Connected: {isConnected ? '✅' : '❌'}</div>
           <div>Address: {address?.slice(0, 6)}...{address?.slice(-4)}</div>
           <div>Items: {nftItems.length}/20</div>
+          <div>Minted Count: {mintedNFTCount}</div> {/* ✅ Debug */}
+          <div>Show Modal: {showSuccessModal ? '✅' : '❌'}</div> {/* ✅ Debug */}
+          <div>Upload Step: {uploadStep}</div> {/* ✅ Debug */}
           <div>Pending: {isPending ? '⏳' : '✅'}</div>
           <div>Confirming: {isConfirming ? '⏳' : '✅'}</div>
           <div>Hash: {hash ? `${hash.slice(0, 6)}...` : 'None'}</div>
-          {contractError && <div className="text-red-400">Error: {contractError.message }</div>}
+          {contractError && <div className="text-red-400">Error: {contractError.message}</div>}
         </div>
       )}
       
-      {uploadStep === 'success' && hash && (
+      {/* ✅ Sửa điều kiện này */}
+      {showSuccessModal && hash && mintedNFTCount > 0 && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="max-w-md w-full mx-4 relative">
             <Button
               variant="ghost"
               size="icon"
               className="absolute top-2 right-2"
-              onClick={resetForm}
+              onClick={() => {
+                setShowSuccessModal(false)
+                setUploadStep('idle') // ✅ Reset ngay về idle
+                setMintedNFTCount(0)
+                setShouldShowModal(false) // ✅ Đảm bảo không hiện lại modal
+              }}
             >
               <X className="w-4 h-4" />
             </Button>
@@ -421,7 +466,7 @@ export default function MintCollectionPage() {
               </div>
               <h3 className="text-lg font-semibold mb-2">NFT Collection Created Successfully! 🎉</h3>
               <p className="text-muted-foreground mb-4">
-                {nftItems.length} NFTs have been minted and are now available on the blockchain.
+                {mintedNFTCount} NFTs have been minted and are now available on the blockchain.
               </p>
               <div className="bg-muted p-3 rounded mb-4">
                 <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
@@ -789,24 +834,21 @@ export default function MintCollectionPage() {
 
               <div className="space-y-4">
                 <div className={`border rounded-lg p-4 ${
-                  uploadStep === 'success' ? 'bg-green-50 border-green-200' :
                   uploadStep === 'error' ? 'bg-red-50 border-red-200' :
-                  'bg-blue-50 border-blue-200'
+                  'bg-blue-50 border-blue-200' // ✅ Chỉ có blue hoặc red
                 }`}>
                   <div className="flex items-start gap-3">
                     {getStepIcon()}
                     <div className="flex-1">
                       <h4 className={`font-medium mb-1 ${
-                        uploadStep === 'success' ? 'text-green-900' :
                         uploadStep === 'error' ? 'text-red-900' :
-                        'text-blue-900'
+                        'text-blue-900' // ✅ Chỉ có blue hoặc red
                       }`}>
                         {uploadStep === 'idle' ? 'Gas Fee Required' : getStepMessage()}
                       </h4>
                       <p className={`text-sm ${
-                        uploadStep === 'success' ? 'text-green-700' :
                         uploadStep === 'error' ? 'text-red-700' :
-                        'text-blue-700'
+                        'text-blue-700' // ✅ Chỉ có blue hoặc red
                       }`}>
                         {uploadStep === 'idle' && 
                           `Minting ${nftItems.length} NFTs requires a gas fee for the collection batch. All NFTs will be minted in a single transaction.`
@@ -817,23 +859,11 @@ export default function MintCollectionPage() {
                         {uploadStep === 'minting' && 
                           'Please confirm the transaction in your wallet to mint the collection.'
                         }
-                        {uploadStep === 'success' && hash && 
-                          `${nftItems.length} NFTs minted successfully! Transaction: ${hash.slice(0, 20)}...`
-                        }
                         {uploadStep === 'error' && 
                           'Please check your wallet and try again.'
                         }
+                        {/* ✅ BỎ HẾT success messages */}
                       </p>
-                      {uploadStep === 'uploading' && (
-                        <div className="mt-2">
-                          <div className="w-full bg-blue-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                              style={{ width: `${uploadProgress}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -859,26 +889,10 @@ export default function MintCollectionPage() {
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Processing...
                     </>
-                  ) : uploadStep === 'success' ? (
-                    <>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Collection Created Successfully!
-                    </>
                   ) : (
-                    `Mint Collection (${nftItems.length} NFTs)`
+                    `Mint Collection (${nftItems.length} NFTs)` // ✅ Luôn hiển thị mint button
                   )}
                 </Button>
-
-                {uploadStep === 'success' && (
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" asChild>
-                      <Link href="/profile">View in Profile</Link>
-                    </Button>
-                    <Button variant="outline" className="flex-1" onClick={resetForm}>
-                      Create Another Collection
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
           </div>

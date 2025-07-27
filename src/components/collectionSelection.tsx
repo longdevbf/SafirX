@@ -10,16 +10,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { X, Package, AlertCircle, Loader2, Upload, ImageIcon } from "lucide-react"
+import { X, AlertCircle, Loader2, Upload, ImageIcon, CheckCircle , ExternalLink} from "lucide-react"
 import { ProcessedNFT } from "@/interfaces/nft"
 import Image from "next/image"
 import { UploadService } from "@/services/pinata"
-
+import Link from "next/link"
 interface CollectionSelectorProps {
   nfts: ProcessedNFT[]
   onClose: () => void
   onSell: (data: CollectionSellData) => void
   isLoading?: boolean
+  // ✅ Sửa type để match với TransactionStatus trong page.tsx
+  transactionStatus?: 'idle' | 'pending' | 'confirming' | 'success' | 'error' | 'waiting_approval' | 'approval_success'
+  lastTransactionHash?: string
 }
 
 export interface CollectionSellData {
@@ -34,7 +37,14 @@ export interface CollectionSellData {
   collectionDescription?: string
 }
 
-export default function CollectionSelector({ nfts, onClose, onSell, isLoading }: CollectionSelectorProps) {
+export default function CollectionSelector({ 
+  nfts, 
+  onClose, 
+  onSell, 
+  isLoading,
+  transactionStatus = 'idle',
+  lastTransactionHash
+}: CollectionSelectorProps) {
   const [selectedNFTs, setSelectedNFTs] = useState<ProcessedNFT[]>([])
   const [listingType, setListingType] = useState<'bundle' | 'individual' | 'same-price'>('bundle')
   const [bundlePrice, setBundlePrice] = useState("")
@@ -158,6 +168,9 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
   }
 
   const isFormValid = () => {
+    // ✅ Không cho submit nếu đang success
+    if (transactionStatus === 'success') return false
+    
     if (!isValidSelection || !collectionName.trim()) return false
 
     if (listingType === 'bundle') {
@@ -173,9 +186,83 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
     return false
   }
 
+  // ✅ Thêm function để reset form khi thành công
+  const handleCreateAnother = () => {
+    setSelectedNFTs([])
+    setListingType('bundle')
+    setBundlePrice("")
+    setIndividualPrices({})
+    setSamePricePerItem("")
+    setCollectionName("")
+    setCollectionImage("")
+    setCollectionDescription("")
+    setSelectedCoverImage(null)
+    
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      {/* ✅ Success Popup - hiển thị khi success */}
+      {transactionStatus === 'success' && lastTransactionHash && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <Card className="max-w-md w-full mx-4 relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2"
+              onClick={onClose} // ✅ Vẫn giữ để có thể đóng hoàn toàn
+            >
+              <X className="w-4 h-4" />
+            </Button>
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Collection Listed Successfully! 🎉</h3>
+              <p className="text-muted-foreground mb-4">
+                Your collection has been listed on the marketplace and is now available for purchase.
+              </p>
+              <div className="bg-muted p-3 rounded mb-4">
+                <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
+                <p className="text-sm font-medium break-all">{lastTransactionHash}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => {
+                    window.open(`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`, "_blank")
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View on Explorer
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={handleCreateAnother} // ✅ Chỉ reset form, không đóng
+                >
+                  List Another
+                </Button>
+              </div>
+              <div className="mt-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  asChild
+                >
+                  <Link href="/marketplace">
+                    View in Marketplace
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      
       <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold">List Collection</h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -184,6 +271,38 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          {/* ✅ Status notification - hiển thị cho tất cả trạng thái trừ idle */}
+          {transactionStatus !== 'idle' && (
+            <div className={`mb-6 p-4 rounded-lg border ${
+              transactionStatus === 'success' 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-blue-50 border-blue-200'
+            }`}>
+              <div className={`flex items-center gap-2 ${
+                transactionStatus === 'success' 
+                  ? 'text-green-700' 
+                  : 'text-blue-700'
+              }`}>
+                {transactionStatus === 'success' ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                <span className="text-sm font-medium">
+                  {transactionStatus === 'success' 
+                    ? 'Collection listed successfully! You can list another collection or close this dialog.' 
+                    : transactionStatus === 'pending'
+                    ? 'Waiting for confirmation...'
+                    : transactionStatus === 'confirming'
+                    ? 'Confirming on blockchain...'
+                    : 'Processing collection transaction...'
+                  }
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Existing collection form content */}
           <div className="space-y-6">
             {/* Contract Selection Warning */}
             {selectedContracts.length > 1 && (
@@ -208,6 +327,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                     placeholder="Enter collection name"
                     value={collectionName}
                     onChange={(e) => setCollectionName(e.target.value)}
+                    disabled={transactionStatus === 'success'} // ✅ Disable khi success
                   />
                 </div>
 
@@ -218,6 +338,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                     placeholder="Describe your collection (optional)"
                     value={collectionDescription}
                     onChange={(e) => setCollectionDescription(e.target.value)}
+                    disabled={transactionStatus === 'success'} // ✅ Disable khi success
                   />
                 </div>
 
@@ -350,6 +471,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                             variant="outline" 
                             size="sm"
                             onClick={() => handleSelectAllFromContract(contractAddress)}
+                            disabled={transactionStatus === 'success'} // ✅ Disable khi success
                           >
                             {selectedFromContract === contractNFTs.length ? 'Deselect All' : 'Select All'}
                           </Button>
@@ -379,6 +501,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                                       checked={isSelected}
                                       onCheckedChange={(checked) => handleNFTToggle(nft, checked as boolean)}
                                       className="bg-white/80"
+                                      disabled={transactionStatus === 'success'} // ✅ Disable khi success
                                     />
                                   </div>
                                 </div>
@@ -398,6 +521,7 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
                                   value={individualPrices[nft.tokenId] || ""}
                                   onChange={(e) => handleIndividualPriceChange(nft.tokenId, e.target.value)}
                                   className="text-sm"
+                                  disabled={transactionStatus === 'success'} // ✅ Disable khi success
                                 />
                               )}
                             </div>
@@ -432,24 +556,27 @@ export default function CollectionSelector({ nfts, onClose, onSell, isLoading }:
               )}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>
-                Cancel
+              <Button 
+                variant="outline" 
+                onClick={onClose}
+                className="flex-1"
+              >
+                {transactionStatus === 'success' ? 'Close' : 'Cancel'}
               </Button>
               <Button 
-                onClick={handleSell} 
-                disabled={!isFormValid() || isLoading}
-                className="min-w-24"
+                onClick={handleSell}
+                disabled={!isFormValid() || isLoading || transactionStatus === 'success'} // ✅ Disable khi success
+                className="flex-1"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Listing...
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Processing...
                   </>
+                ) : transactionStatus === 'success' ? (
+                  'Listed Successfully!'
                 ) : (
-                  <>
-                    <Package className="w-4 h-4 mr-2" />
-                    List Collection
-                  </>
+                  'List Collection'
                 )}
               </Button>
             </div>

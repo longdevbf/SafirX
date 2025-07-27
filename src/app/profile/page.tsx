@@ -113,6 +113,17 @@ export default function ProfilePage() {
   const [showSuccessNotification, setShowSuccessNotification] = useState(false)
   const [successNotificationMessage, setSuccessNotificationMessage] = useState("")
 
+  // ✅ Collection States - Thiết kế lại từ đầu
+  const [collectionListing, setCollectionListing] = useState({
+    isOpen: false,
+    isLoading: false,
+    status: 'idle' as 'idle' | 'approving' | 'listing' | 'success' | 'error',
+    currentStep: 1, // 1: Form, 2: Approval (if needed), 3: Listing, 4: Success
+    error: null as string | null,
+    transactionHash: '',
+    needsApproval: false
+  })
+
   // -----------------
   // Hooks
   // -----------------
@@ -283,144 +294,212 @@ export default function ProfilePage() {
   }
 
   // Transaction Handlers
-  const handleApprovalSuccess = () => {
+  const handleApprovalSuccess = async () => {
     setTransactionStatus('approval_success')
     if (selectedNFT) {
       setMarketplaceApprovalStatus(prev => ({ ...prev, [selectedNFT.contractAddress]: true }))
     }
-        toast({
+    
+    toast({
       title: "✅ Approval Successful!",
       description: (
         <div className="space-y-2">
-          <p>Your NFT collection has been approved for the marketplace!</p>
+          <p>NFT collection approved! Now proceeding with listing...</p>
           <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${marketHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs block">
-            View on Explorer →
+            View Approval Transaction →
           </a>
         </div>
       ),
-      duration: 8000
+      duration: 6000
     })
-    resetTransactionStates(false)
+    
+    // ✅ Auto-proceed with listing after approval
+    if (selectedNFT && sellPrice && parseFloat(sellPrice) > 0) {
+      try {
+        // Wait a moment for the approval to be processed
+        setTimeout(async () => {
+          setCurrentTransactionType('single')
+          setTransactionStatus('pending')
+          
+          toast({ 
+            title: "⏳ Proceeding with Listing", 
+            description: "Please confirm the listing transaction...",
+            duration: 5000
+          })
+          
+          await listSingleNFT(selectedNFT.contractAddress, selectedNFT.tokenId, sellPrice)
+        }, 2000)
+        
+      } catch (err) {
+        handleTransactionError(err, "NFT Listing")
+        setIsListingNFT(false)
+      }
+    }
+    
+    // ✅ Handle collection approval -> auto-proceed with collection listing
+    const pendingCollectionData = (window as any).pendingCollectionData
+    
+    if (pendingCollectionData && currentTransactionType === 'approval') {
+      try {
+        // Mark collection as approved
+        setMarketplaceApprovalStatus(prev => ({ 
+          ...prev, 
+          [pendingCollectionData.nftContract]: true 
+        }))
+        
+        // Wait a moment for the approval to be processed
+        setTimeout(async () => {
+          setCurrentTransactionType('collection')
+          setTransactionStatus('pending')
+          
+          toast({ 
+            title: "⏳ Proceeding with Collection Listing", 
+            description: "Please confirm the collection listing transaction...",
+            duration: 5000
+          })
+          
+          if (pendingCollectionData.listingType === 'bundle') {
+            await listCollectionBundle(pendingCollectionData.nftContract, pendingCollectionData.tokenIds, pendingCollectionData.bundlePrice!, pendingCollectionData.collectionName)
+          } else if (pendingCollectionData.listingType === 'individual') {
+            await listCollectionIndividual(pendingCollectionData.nftContract, pendingCollectionData.tokenIds, pendingCollectionData.individualPrices!, pendingCollectionData.collectionName)
+          } else if (pendingCollectionData.listingType === 'same-price') {
+            await listCollectionSamePrice(pendingCollectionData.nftContract, pendingCollectionData.tokenIds, pendingCollectionData.samePricePerItem!, pendingCollectionData.collectionName)
+          }
+        }, 2000)
+        
+      } catch (err) {
+        handleTransactionError(err, "Collection Listing")
+        setIsCollectionListing(false)
+      }
+    }
   }
 
-  const handleListingSuccess = async () => {
+const handleListingSuccess = async () => {
+  setTransactionStatus('success')
+  
+  if (currentTransactionType === 'single' && selectedNFT) {
+    const nftId = `${selectedNFT.contractAddress}-${selectedNFT.tokenId}`
+    setSuccessfulNFTId(nftId)
+    await syncSingleNFTListing()
+  } else if (currentTransactionType === 'collection') {
+    await syncCollectionListing()
+  }
+  
+  toast({
+    title: currentTransactionType === 'collection' ? "🎉 Collection Listed Successfully!" : "🎉 NFT Listed Successfully!",
+    description: (
+      <div className="space-y-2">
+        <p>{currentTransactionType === 'collection' ? "Your collection has been listed!" : "Your NFT has been listed!"}</p>
+        <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${marketHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs block">
+          View on Explorer →
+        </a>
+      </div>
+    ),
+    duration: 10000 // Giảm duration vì đã có popup
+  })
+    
+  setIsListingNFT(false)
+  setIsCollectionListing(false)
+  
+  setTimeout(() => refetch(), 3000)
+}
+
+// ✅ Sửa handleAuctionSuccess để lưu transaction hash
+const handleAuctionSuccess = async (auctionId: string) => {
+  const storedAuctionData = (window as any).pendingAuctionData;
+  const storedSelectedNFT = (window as any).pendingSelectedNFT;
+  
+  if (auctionId) {
+    const auctionDataForDb = storedSelectedNFT
+      ? prepareAuctionData(
+          auctionId,
+          storedSelectedNFT.contractAddress,
+          storedSelectedNFT.tokenId,
+          null,
+          address!,
+          {
+            auctionType: 'SINGLE_NFT',
+            title: storedAuctionData.title,
+            description: storedAuctionData.description,
+            startingPrice: storedAuctionData.startingPrice,
+            reservePrice: storedAuctionData.reservePrice,
+            minBidIncrement: storedAuctionData.minBidIncrement,
+            duration: storedAuctionData.duration,
+            allowPublicReveal: false,
+            collectionImage: storedSelectedNFT.image
+          },
+          auctionHash as string,
+          storedSelectedNFT
+        )
+      : prepareAuctionData(
+          auctionId,
+          storedAuctionData.nftContract,
+          null,
+          storedAuctionData.tokenIds,
+          address!,
+          {
+            auctionType: 'COLLECTION',
+            title: storedAuctionData.title,
+            description: storedAuctionData.description,
+            startingPrice: storedAuctionData.startingPrice,
+            reservePrice: storedAuctionData.reservePrice,
+            minBidIncrement: storedAuctionData.minBidIncrement,
+            duration: storedAuctionData.duration,
+            allowPublicReveal: false,
+            collectionImage: storedAuctionData.collectionImage,
+            individualNftMetadata: storedAuctionData.tokenIds.map((tokenId: string) => {
+              const nft = nfts.find(n => 
+                n.contractAddress === storedAuctionData.nftContract && 
+                String(n.tokenId) === tokenId
+              );
+              return {
+                tokenId: parseInt(tokenId),
+                name: nft?.name || `NFT #${tokenId}`,
+                description: nft?.description || '',
+                image: nft?.image || '/placeholder-nft.jpg',
+                attributes: nft?.attributes || [],
+                rarity: nft?.rarity || 'Common',
+                collectionName: nft?.collectionName || storedAuctionData.title
+              };
+            })
+          },
+          auctionHash as string,
+          storedAuctionData
+        );
+    
+    const success = await syncAuctionToDatabase(auctionDataForDb)
+    
+    // ✅ Set success state cho auction và currentTransactionType
     setTransactionStatus('success')
-    if (currentTransactionType === 'single' && selectedNFT) {
-      const nftId = `${selectedNFT.contractAddress}-${selectedNFT.tokenId}`
-      setSuccessfulNFTId(nftId)
-      await syncSingleNFTListing()
-    } else if (currentTransactionType === 'collection') {
-      await syncCollectionListing()
-    }
-      toast({
-      title: currentTransactionType === 'collection' ? "🎉 Collection Listed Successfully!" : "🎉 NFT Listed Successfully!",
+    setCurrentTransactionType(storedSelectedNFT ? 'single' : 'collection') // ✅ Set đúng type
+    
+    toast({
+      title: "🎉 Auction Created Successfully!",
       description: (
         <div className="space-y-2">
-          <p>{currentTransactionType === 'collection' ? "Your collection has been listed!" : "Your NFT has been listed!"}</p>
-          <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${marketHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs block">
+          <p>Your auction has been created!</p>
+          <div className="text-xs font-mono bg-gray-100 p-2 rounded">
+            Auction ID: {auctionId}
+          </div>
+          <a
+            href={`https://testnet.explorer.sapphire.oasis.dev/tx/${auctionHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:underline text-xs block"
+          >
             View on Explorer →
           </a>
         </div>
       ),
-      duration: 15000
+      duration: 10000
     })
-    resetTransactionStates(true)
-    setTimeout(() => refetch(), 3000)
-  }
-
-  // ✅ Sửa handleAuctionSuccess để lấy image thực tế của NFTs
-  const handleAuctionSuccess = async (auctionId: string) => {
-    const storedAuctionData = (window as any).pendingAuctionData;
-    const storedSelectedNFT = (window as any).pendingSelectedNFT;
     
-    if (auctionId) {
-      const auctionDataForDb = storedSelectedNFT
-        ? prepareAuctionData(
-              auctionId,
-            storedSelectedNFT.contractAddress,
-            storedSelectedNFT.tokenId,
-              null,
-            address!,
-              {
-                auctionType: 'SINGLE_NFT',
-              title: storedAuctionData.title,
-              description: storedAuctionData.description,
-              startingPrice: storedAuctionData.startingPrice,
-              reservePrice: storedAuctionData.reservePrice,
-              minBidIncrement: storedAuctionData.minBidIncrement,
-              duration: storedAuctionData.duration,
-              allowPublicReveal: false,
-              collectionImage: storedSelectedNFT.image
-            },
-            auctionHash as string,
-            storedSelectedNFT
-          )
-        : prepareAuctionData(
-            auctionId,
-            storedAuctionData.nftContract,
-            null,
-            storedAuctionData.tokenIds,
-            address!,
-            {
-              auctionType: 'COLLECTION',
-              title: storedAuctionData.title,
-              description: storedAuctionData.description,
-              startingPrice: storedAuctionData.startingPrice,
-              reservePrice: storedAuctionData.reservePrice,
-              minBidIncrement: storedAuctionData.minBidIncrement,
-              duration: storedAuctionData.duration,
-              allowPublicReveal: false,
-              collectionImage: storedAuctionData.collectionImage,
-              // ✅ Lưu metadata của tất cả NFTs trong collection với image thực tế
-              individualNftMetadata: storedAuctionData.tokenIds.map((tokenId: string) => {
-                const nft = nfts.find(n => 
-                  n.contractAddress === storedAuctionData.nftContract && 
-                  String(n.tokenId) === tokenId
-                );
-                return {
-                  tokenId: parseInt(tokenId),
-                  name: nft?.name || `NFT #${tokenId}`,
-                  description: nft?.description || '',
-                  image: nft?.image || '/placeholder-nft.jpg', // ✅ Lấy image thực tế từ NFT
-                  attributes: nft?.attributes || [],
-                  rarity: nft?.rarity || 'Common',
-                  collectionName: nft?.collectionName || storedAuctionData.title
-                };
-              })
-            },
-            auctionHash as string,
-            storedAuctionData
-          );
-      
-            const success = await syncAuctionToDatabase(auctionDataForDb)
-              toast({
-                title: "🎉 Auction Created Successfully!",
-                description: (
-                  <div className="space-y-2">
-            <p>Your auction has been created!</p>
-                    <div className="text-xs font-mono bg-gray-100 p-2 rounded">
-                      Auction ID: {auctionId}
-                    </div>
-                    <a
-                      href={`https://testnet.explorer.sapphire.oasis.dev/tx/${auctionHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 hover:underline text-xs block"
-                    >
-                      View on Explorer →
-                    </a>
-                  </div>
-                ),
-        duration: 10000
-      })
-      if (!success) console.error('❌ Failed to sync auction to database')
-    }
-    
-          delete (window as any).pendingAuctionData
-    delete (window as any).pendingSelectedNFT
-    resetAuctionStates()
-    setTimeout(() => refetch(), 3000)
+    if (!success) console.error('❌ Failed to sync auction to database')
   }
+  
+  // ✅ KHÔNG reset states ngay lập tức để popup hiển thị
+  setTimeout(() => refetch(), 3000)
+}
 
   const handleTransactionError = (err: any, type: string) => {
     setTransactionStatus('error')
@@ -435,17 +514,41 @@ export default function ProfilePage() {
       toast({ title: "Invalid Price", description: "Please enter a valid price greater than 0", variant: "destructive" })
       return
     }
+    
     setIsListingNFT(true)
     setTransactionStatus('idle')
     setCurrentTransactionType('single')
+    
     try {
       const isApproved = await checkCollectionApproval(selectedNFT.contractAddress)
+      
       if (!isApproved) {
-        await requestApproval(selectedNFT.contractAddress)
+        // ✅ Inform user about the 2-step process upfront
+        toast({ 
+          title: "🔒 Approval Required", 
+          description: "First time selling from this collection requires approval. You'll need to confirm 2 transactions: approval first, then listing.",
+          duration: 10000 
+        })
+        
+        setTransactionStatus('waiting_approval')
+        setCurrentTransactionType('approval')
+        
+        // Step 1: Request approval
+        await approveNFT(selectedNFT.contractAddress)
+        toast({ 
+          title: "✅ Approval Transaction Sent", 
+          description: "Please confirm the approval transaction. After it's confirmed, the listing will proceed automatically.",
+          duration: 8000 
+        })
+        
+        // Don't return here - let the useEffect handle the next step
         return
       }
+      
+      // If already approved, proceed directly to listing
       await listSingleNFT(selectedNFT.contractAddress, selectedNFT.tokenId, sellPrice)
-      toast({ title: "⏳ Transaction Submitted", description: "Waiting for blockchain confirmation..." })
+      toast({ title: "⏳ Listing Transaction Submitted", description: "Waiting for blockchain confirmation..." })
+      
     } catch (err) {
       handleTransactionError(err, "NFT Listing")
       setIsListingNFT(false)
@@ -456,17 +559,45 @@ export default function ProfilePage() {
     setIsCollectionListing(true)
     setTransactionStatus('idle')
     setCurrentTransactionType('collection')
+    
     try {
       const isApproved = await checkCollectionApproval(data.nftContract)
+      
       if (!isApproved) {
-        await requestApproval(data.nftContract)
+        toast({ 
+          title: "🔒 Collection Approval Required", 
+          description: "First time listing from this collection requires approval. You'll need to confirm 2 transactions: approval first, then listing.",
+          duration: 10000 
+        })
+        
+        setTransactionStatus('waiting_approval')
+        setCurrentTransactionType('approval')
+        
+        // Store collection data for later use
+        ;(window as any).pendingCollectionData = data
+        
+        await approveNFT(data.nftContract)
+        toast({ 
+          title: "✅ Collection Approval Sent", 
+          description: "Please confirm the approval transaction. After it's confirmed, the collection listing will proceed automatically.",
+          duration: 8000 
+        })
         return
       }
+      
+      // If already approved, proceed directly to listing
       ;(window as any).pendingCollectionData = data
-      if (data.listingType === 'bundle') await listCollectionBundle(data.nftContract, data.tokenIds, data.bundlePrice!, data.collectionName)
-      else if (data.listingType === 'individual') await listCollectionIndividual(data.nftContract, data.tokenIds, data.individualPrices!, data.collectionName)
-      else if (data.listingType === 'same-price') await listCollectionSamePrice(data.nftContract, data.tokenIds, data.samePricePerItem!, data.collectionName)
-      toast({ title: "⏳ Transaction Submitted", description: "Waiting for blockchain confirmation..." })
+    
+    if (data.listingType === 'bundle') {
+      await listCollectionBundle(data.nftContract, data.tokenIds, data.bundlePrice!, data.collectionName)
+    } else if (data.listingType === 'individual') {
+      await listCollectionIndividual(data.nftContract, data.tokenIds, data.individualPrices!, data.collectionName)
+    } else if (data.listingType === 'same-price') {
+      await listCollectionSamePrice(data.nftContract, data.tokenIds, data.samePricePerItem!, data.collectionName)
+    }
+    
+    toast({ title: "⏳ Collection Listing Submitted", description: "Waiting for blockchain confirmation..." })
+    
     } catch (err) {
       handleTransactionError(err, "Collection Listing")
       setIsCollectionListing(false)
@@ -482,68 +613,119 @@ export default function ProfilePage() {
     setTransactionStatus('waiting_approval')
   }
 
-  // Auction Functions
-  const handleCreateSingleAuction = async () => {
-    if (!selectedAuctionNFT || !address || !auctionData.title || !auctionData.startingPrice || !auctionData.reservePrice) return
-    try {
-      if (!isAuctionApproved) {
-        await approveForAuction()
-        toast({ title: "🔒 Approval Required", description: "Please approve your NFT for the auction contract first." })
-        return
-      }
-      ;(window as any).pendingSelectedNFT = selectedAuctionNFT
-      ;(window as any).pendingAuctionData = auctionData
-      await createSingleNFTAuction(
-        selectedAuctionNFT.contractAddress as `0x${string}`, 
-        Number(selectedAuctionNFT.tokenId), 
-        auctionData.startingPrice,
-        auctionData.reservePrice,
-        auctionData.minBidIncrement,
-        auctionData.duration, // ✅ Truyền giờ, hook sẽ convert sang giây
-        auctionData.title,
-        auctionData.description
-      )
-      toast({ title: "⏳ Auction Submitted", description: "Please wait for blockchain confirmation..." })
-    } catch (err) {
-      handleTransactionError(err, "Auction Creation")
-    }
-  }
+// Thêm state này vào đầu component
+const [isCreatingAuction, setIsCreatingAuction] = useState(false)
 
-  const handleCreateCollectionAuction = async (data: CollectionAuctionData) => {
-    if (!address || !data.nftContract || data.tokenIds.length < 2 || !data.startingPrice || !data.reservePrice || !data.title) return
-    try {
-      ;(window as any).pendingAuctionData = data
-      await createCollectionAuction(
-        data.nftContract as `0x${string}`, 
-        data.tokenIds.map(Number), 
-        data.startingPrice,
-        data.reservePrice,
-        data.minBidIncrement,
-        data.duration, // ✅ Truyền giờ, hook sẽ convert sang giây
-        data.title,
-        data.description
-      )
-      toast({ title: "⏳ Collection Auction Submitted", description: "Please wait for blockchain confirmation..." })
-    } catch (err) {
-      handleTransactionError(err, "Collection Auction Creation")
+// Sửa handleCreateSingleAuction
+const handleCreateSingleAuction = async () => {
+  if (!selectedAuctionNFT || !address || !auctionData.title || !auctionData.startingPrice || !auctionData.reservePrice) return
+  
+  try {
+    if (!isAuctionApproved) {
+      await approveForAuction()
+      toast({ title: "🔒 Approval Required", description: "Please approve your NFT for the auction contract first." })
+      return
     }
+    
+    // ✅ Set loading ngay khi bắt đầu
+    setIsCreatingAuction(true)
+    
+    ;(window as any).pendingSelectedNFT = selectedAuctionNFT
+    ;(window as any).pendingAuctionData = auctionData
+    
+    await createSingleNFTAuction(
+      selectedAuctionNFT.contractAddress as `0x${string}`, 
+      Number(selectedAuctionNFT.tokenId), 
+      auctionData.startingPrice,
+      auctionData.reservePrice,
+      auctionData.minBidIncrement,
+      auctionData.duration,
+      auctionData.title,
+      auctionData.description
+    )
+    
+    toast({ title: "⏳ Auction Submitted", description: "Please wait for blockchain confirmation..." })
+    
+  } catch (err) {
+    // ✅ Reset loading khi lỗi
+    setIsCreatingAuction(false)
+    handleTransactionError(err, "Auction Creation")
   }
+}
 
-  // Reset Functions
-  const resetTransactionStates = (closeDialog: boolean) => {
-    setIsListingNFT(false)
-    setIsCollectionListing(false)
+// ✅ Reset loading state khi success hoặc close dialog
+useEffect(() => {
+  if (transactionStatus === 'success' || !showAuctionDialog) {
+    setIsCreatingAuction(false)
+  }
+}, [transactionStatus, showAuctionDialog])
+
+// Thêm state vào đầu component (sau dòng 113)
+const [isCreatingCollectionAuction, setIsCreatingCollectionAuction] = useState(false)
+
+// Sửa handleCreateCollectionAuction
+const handleCreateCollectionAuction = async (data: CollectionAuctionData) => {
+  if (!address || !data.nftContract || data.tokenIds.length < 2 || !data.startingPrice || !data.reservePrice || !data.title) return
+  
+  try {
+    // ✅ Set loading ngay khi bắt đầu
+    setIsCreatingCollectionAuction(true)
+    setCurrentTransactionType('collection') // ✅ Set transaction type
+    
+    ;(window as any).pendingAuctionData = data
+    
+    await createCollectionAuction(
+      data.nftContract as `0x${string}`, 
+      data.tokenIds.map(Number), 
+      data.startingPrice,
+      data.reservePrice,
+      data.minBidIncrement,
+      data.duration,
+      data.title,
+      data.description
+    )
+    
+    toast({ 
+      title: "⏳ Collection Auction Submitted", 
+      description: "Please wait for blockchain confirmation..." 
+    })
+    
+  } catch (err) {
+    // ✅ Reset loading khi lỗi
+    setIsCreatingCollectionAuction(false)
     setCurrentTransactionType(null)
-    if (closeDialog) {
-      setSelectedNFT(null)
-      setSellPrice("")
-      setSellDescription("")
-      setSellCategory("")
-    }
+    handleTransactionError(err, "Collection Auction Creation")
   }
+}
+
+// ✅ Reset loading state khi success hoặc close dialog
+useEffect(() => {
+  if (transactionStatus === 'success' || !showAuctionCollectionSelector) {
+    setIsCreatingCollectionAuction(false)
+  }
+}, [transactionStatus, showAuctionCollectionSelector])
+  // Reset Functions
+const resetTransactionStates = (closeDialog: boolean = true) => {
+  setIsListingNFT(false)
+  setIsCollectionListing(false)
+  setCurrentTransactionType(null)
+  setTransactionStatus('idle')
+  setLastTransactionHash('')
+  setSuccessfulNFTId(null)
+  
+  if (closeDialog) {
+    setSelectedNFT(null)
+    setSellPrice("")
+    setSellDescription("")
+    setSellCategory("")
+    setShowCollectionSelector(false)
+  }
+}
 
   const resetAuctionStates = () => {
     setSelectedAuctionNFT(null)
+    setIsCreatingAuction(false)
+    setIsCreatingCollectionAuction(false) 
     setAuctionData({ 
       startingPrice: "", 
       reservePrice: "", 
@@ -615,11 +797,21 @@ export default function ProfilePage() {
     const isCurrentNFTSelected = selectedNFT?.id === nft.id
     const currentNFTId = `${nft.contractAddress}-${nft.tokenId}`
     const isThisNFTSuccessful = successfulNFTId === currentNFTId && transactionStatus === 'success'
+    
+    // ✅ Thêm check cho approval success
+    const isThisNFTApprovalSuccess = selectedNFT?.id === nft.id && transactionStatus === 'approval_success'
 
     return (
       <Dialog open={isCurrentNFTSelected}>
         <DialogTrigger asChild>
-          <Button className="flex-1" size="sm" onClick={() => setSelectedNFT(nft)}>
+          <Button className="flex-1" size="sm" onClick={() => {
+            // ✅ Reset states khi mở dialog mới
+            if (selectedNFT?.id !== nft.id) {
+              setTransactionStatus('idle')
+              setSuccessfulNFTId(null)
+            }
+            setSelectedNFT(nft)
+          }}>
             <Tag className="h-4 w-4 mr-2" /> Sell
           </Button>
         </DialogTrigger>
@@ -663,18 +855,65 @@ export default function ProfilePage() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {/* ✅ Success state UI */}
               {transactionStatus !== 'idle' && selectedNFT?.id === nft.id && (
-                <div className={`p-3 rounded-lg border ${isThisNFTSuccessful ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-                  <div className={`flex items-center gap-2 ${isThisNFTSuccessful ? 'text-green-700' : 'text-blue-700'}`}>
-                    {isThisNFTSuccessful ? <CheckCircle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
+                <div className={`p-3 rounded-lg border ${
+                  isThisNFTSuccessful ? 'bg-green-50 border-green-200' : 
+                  transactionStatus === 'waiting_approval' || transactionStatus === 'approval_success' ? 'bg-yellow-50 border-yellow-200' : 
+                  'bg-blue-50 border-blue-200'
+                }`}>
+                  <div className={`flex items-center gap-2 ${
+                    isThisNFTSuccessful ? 'text-green-700' : 
+                    transactionStatus === 'waiting_approval' || transactionStatus === 'approval_success' ? 'text-yellow-700' : 
+                    'text-blue-700'
+                  }`}>
+                    {isThisNFTSuccessful ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    )}
                     <span className="text-sm font-medium">
-                      {transactionStatus === 'pending' ? 'Waiting for confirmation...' : transactionStatus === 'confirming' ? 'Confirming on blockchain...' : 'NFT listed successfully!'}
+                      {transactionStatus === 'waiting_approval' ? 'Step 1/2: Approving collection access...' : 
+                       transactionStatus === 'approval_success' ? 'Step 2/2: Preparing to list NFT...' :
+                       transactionStatus === 'pending' ? 'Processing listing transaction...' : 
+                       transactionStatus === 'confirming' ? 'Confirming on blockchain...' : 
+                       transactionStatus === 'success' ? 'NFT listed successfully!' :
+                       'Processing transaction...'}
                     </span>
                   </div>
+                  
+                  {/* ✅ Success transaction hash display */}
                   {isThisNFTSuccessful && lastTransactionHash && (
                     <div className="mt-3 space-y-2">
-                      <div className="text-xs bg-white p-2 rounded border font-mono">{lastTransactionHash}</div>
-                      <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
+                      <div className="text-xs bg-white p-2 rounded border">
+                        <div className="font-medium mb-1">Transaction Hash:</div>
+                        <div className="font-mono break-all text-gray-600 text-[10px]">
+                          {lastTransactionHash}
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <a 
+                          href={`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1"
+                        >
+                          <Button size="sm" variant="outline" className="w-full text-xs">
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            View on Explorer
+                          </Button>
+                        </a>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => navigator.clipboard.writeText(lastTransactionHash)}
+                          className="flex-1 text-xs"
+                        >
+                          <Copy className="h-3 w-3 mr-1" />
+                          Copy Hash
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -682,10 +921,46 @@ export default function ProfilePage() {
             </div>
           </div>
           <div className="flex gap-2 mt-4 pt-4 border-t flex-shrink-0">
-            <Button onClick={handleListSingleNFT} disabled={isCurrentNFTLoading || !sellPrice || parseFloat(sellPrice) <= 0 || isThisNFTSuccessful} className="flex-1">
-              {isCurrentNFTLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Processing...</> : isThisNFTSuccessful ? 'Listed Successfully!' : 'List for Sale'}
+
+<Button 
+  onClick={handleListSingleNFT}
+  disabled={isCurrentNFTLoading || !sellPrice || parseFloat(sellPrice) <= 0 || isThisNFTSuccessful}
+  className="flex-1"
+>
+  {isCurrentNFTLoading ? (
+    <>
+      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+      {transactionStatus === 'waiting_approval' ? 'Approving Collection...' :
+       transactionStatus === 'approval_success' ? 'Preparing Listing...' :
+       transactionStatus === 'pending' ? (
+         currentTransactionType === 'approval' ? 'Confirming Approval...' : 'Confirming Listing...'
+       ) : 
+       transactionStatus === 'confirming' ? (
+         currentTransactionType === 'approval' ? 'Processing Approval...' : 'Processing Listing...'
+       ) : 'Processing...'}
+    </>
+  ) : isThisNFTSuccessful ? (
+    'Listed Successfully!'
+  ) : (
+    'List for Sale'
+  )}
+</Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                // ✅ Nếu success, reset hoàn toàn
+                if (isThisNFTSuccessful) {
+                  setTransactionStatus('idle')
+                  setSuccessfulNFTId(null)
+                  setCurrentTransactionType(null)
+                }
+                resetTransactionStates(true)
+              }}
+              className="flex-1"
+              disabled={isCurrentNFTLoading && transactionStatus === 'waiting_approval'}
+            >
+              {isThisNFTSuccessful ? 'Close' : 'Cancel'}
             </Button>
-            <Button variant="outline" onClick={() => resetTransactionStates(true)} className="flex-1">{isThisNFTSuccessful ? 'Close' : 'Cancel'}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -694,8 +969,99 @@ export default function ProfilePage() {
 
   const renderAuctionDialog = () => selectedAuctionNFT && (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-hidden relative flex flex-col">
-        <Button variant="ghost" size="sm" onClick={() => setShowAuctionDialog(false)} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
+      {/* ✅ Success Popup cho auction */}
+      {transactionStatus === 'success' && lastTransactionHash && currentTransactionType === 'single' && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <Card className="max-w-md w-full mx-4 relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2"
+              onClick={() => {
+                // Reset states và đóng dialog
+                setTransactionStatus('idle')
+                setCurrentTransactionType(null)
+                setLastTransactionHash('')
+                delete (window as any).pendingAuctionData
+                delete (window as any).pendingSelectedNFT
+                resetAuctionStates()
+                setShowAuctionDialog(false)
+              }}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Auction Created Successfully! 🎉</h3>
+              <p className="text-muted-foreground mb-4">
+                Your NFT auction has been created and is now live on the marketplace.
+              </p>
+              <div className="bg-muted p-3 rounded mb-4">
+                <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
+                <p className="text-sm font-medium break-all">{lastTransactionHash}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => {
+                    window.open(`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`, "_blank")
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View on Explorer
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={() => {
+                    // Reset và tạo auction mới
+                    setTransactionStatus('idle')
+                    setCurrentTransactionType(null)
+                    setLastTransactionHash('')
+                    delete (window as any).pendingAuctionData
+                    delete (window as any).pendingSelectedNFT
+                    resetAuctionStates()
+                    // Không đóng dialog, chỉ reset form
+                  }}
+                >
+                  Create Another
+                </Button>
+              </div>
+              <div className="mt-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  asChild
+                >
+                  <Link href="/auctions">
+                    View in Auctions
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ✅ Main Dialog - ẩn khi success */}
+      <div className={`bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-hidden relative flex flex-col ${
+        transactionStatus === 'success' && currentTransactionType === 'single' ? 'hidden' : ''
+      }`}>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => {
+            setTransactionStatus('idle')
+            setCurrentTransactionType(null)
+            setLastTransactionHash('')
+            setShowAuctionDialog(false)
+          }} 
+          className="absolute right-4 top-4 z-20"
+        >
+          <X className="h-4 w-4" />
+        </Button>
         <div className="p-6 space-y-4 overflow-y-auto">
           <h2 className="text-xl font-bold mb-2 flex items-center gap-2"><Gavel className="h-5 w-5" />Create Auction for {selectedAuctionNFT.name}</h2>
           <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
@@ -707,28 +1073,143 @@ export default function ProfilePage() {
               <p className="text-sm text-muted-foreground truncate">{selectedAuctionNFT.collectionName}</p>
             </div>
           </div>
+
+          {/* ✅ Loading/Processing State */}
+          {(isAuctionPending || isAuctionConfirming || isApprovalPending || isApprovalConfirming) && (
+            <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+              <div className="flex items-center gap-2 text-blue-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm font-medium">
+                  {isApprovalPending || isApprovalConfirming
+                    ? 'Approving NFT for auction...'
+                    : isAuctionPending 
+                    ? 'Creating auction transaction...' 
+                    : 'Confirming auction on blockchain...'}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
-            <div><Label>Starting Price (ROSE)</Label><Input type="number" step="0.01" value={auctionData.startingPrice} onChange={e => setAuctionData(d => ({ ...d, startingPrice: e.target.value }))} placeholder="0.00" /></div>
-            <div><Label>Reserve Price (ROSE)</Label><Input type="number" step="0.01" value={auctionData.reservePrice} onChange={e => setAuctionData(d => ({ ...d, reservePrice: e.target.value }))} placeholder="0.00" /></div>
+            <div>
+              <Label>Starting Price (ROSE)</Label>
+              <Input 
+                type="number" 
+                step="0.01" 
+                value={auctionData.startingPrice} 
+                onChange={e => setAuctionData(d => ({ ...d, startingPrice: e.target.value }))} 
+                placeholder="0.00"
+                disabled={isAuctionPending || isAuctionConfirming || isApprovalPending || isApprovalConfirming}
+              />
+            </div>
+            <div>
+              <Label>Reserve Price (ROSE)</Label>
+              <Input 
+                type="number" 
+                step="0.01" 
+                value={auctionData.reservePrice} 
+                onChange={e => setAuctionData(d => ({ ...d, reservePrice: e.target.value }))} 
+                placeholder="0.00"
+                disabled={isAuctionPending || isAuctionConfirming || isApprovalPending || isApprovalConfirming}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><Label>Min Bid Increment (ROSE)</Label><Input type="number" step="0.01" value={auctionData.minBidIncrement} onChange={e => setAuctionData(d => ({ ...d, minBidIncrement: e.target.value }))} placeholder="0.1" /></div>
-            <div><Label>Duration (hours)</Label><Input type="number" min="1" max="720" value={auctionData.duration} onChange={e => setAuctionData(d => ({ ...d, duration: Number(e.target.value) }))} placeholder="24" /></div>
+            <div>
+              <Label>Min Bid Increment (ROSE)</Label>
+              <Input 
+                type="number" 
+                step="0.01" 
+                value={auctionData.minBidIncrement} 
+                onChange={e => setAuctionData(d => ({ ...d, minBidIncrement: e.target.value }))} 
+                placeholder="0.1"
+                disabled={isAuctionPending || isAuctionConfirming || isApprovalPending || isApprovalConfirming}
+              />
+            </div>
+            <div>
+              <Label>Duration (hours)</Label>
+              <Input 
+                type="number" 
+                min="1" 
+                max="720" 
+                value={auctionData.duration} 
+                onChange={e => setAuctionData(d => ({ ...d, duration: Number(e.target.value) }))} 
+                placeholder="24"
+                disabled={isAuctionPending || isAuctionConfirming || isApprovalPending || isApprovalConfirming}
+              />
+            </div>
           </div>
-          <div><Label>Auction Title</Label><Input value={auctionData.title} onChange={e => setAuctionData(d => ({ ...d, title: e.target.value }))} placeholder="Auction title" /></div>
-          <div><Label>Description</Label><textarea value={auctionData.description} onChange={e => setAuctionData(d => ({ ...d, description: e.target.value }))} className="w-full p-2 border rounded-md" rows={2} placeholder="Describe your auction..." /></div>
+          <div>
+            <Label>Auction Title</Label>
+            <Input 
+              value={auctionData.title} 
+              onChange={e => setAuctionData(d => ({ ...d, title: e.target.value }))} 
+              placeholder="Auction title"
+              disabled={isAuctionPending || isAuctionConfirming || isApprovalPending || isApprovalConfirming}
+            />
+          </div>
+          <div>
+            <Label>Description</Label>
+            <textarea 
+              value={auctionData.description} 
+              onChange={e => setAuctionData(d => ({ ...d, description: e.target.value }))} 
+              className="w-full p-2 border rounded-md" 
+              rows={2} 
+              placeholder="Describe your auction..."
+              disabled={isAuctionPending || isAuctionConfirming || isApprovalPending || isApprovalConfirming}
+            />
+          </div>
           <div className="flex flex-col gap-2 mt-4">
             {!isAuctionApproved ? (
-              <Button onClick={approveForAuction} disabled={isApprovalPending || isApprovalConfirming} className="bg-blue-600 text-white hover:bg-blue-700">
-                {isApprovalPending || isApprovalConfirming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Approve for Auction
+              <Button 
+                onClick={approveForAuction} 
+                disabled={isApprovalPending || isApprovalConfirming || isAuctionPending || isAuctionConfirming} 
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {isApprovalPending || isApprovalConfirming ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    {isApprovalPending ? 'Approving...' : 'Confirming Approval...'}
+                  </>
+                ) : (
+                  'Approve for Auction'
+                )}
               </Button>
             ) : (
-              <Button onClick={handleCreateSingleAuction} disabled={isAuctionPending || isAuctionConfirming || !auctionData.startingPrice || !auctionData.reservePrice || !auctionData.title} className="bg-green-600 text-white hover:bg-green-700">
-                {isAuctionPending || isAuctionConfirming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Create Auction
-              </Button>
+              // Trong renderAuctionDialog, sửa phần Create Auction button:
+
+<Button 
+  onClick={handleCreateSingleAuction} 
+  disabled={
+    isCreatingAuction || // ✅ Thêm condition này
+    isAuctionPending || 
+    isAuctionConfirming || 
+    isApprovalPending || 
+    isApprovalConfirming ||
+    !auctionData.startingPrice || 
+    !auctionData.reservePrice || 
+    !auctionData.title
+  } 
+  className="bg-green-600 text-white hover:bg-green-700"
+>
+  {(isCreatingAuction || isAuctionPending || isAuctionConfirming) ? ( // ✅ Sửa condition
+    <>
+      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+      {isCreatingAuction && !isAuctionPending ? 'Creating Auction...' : 
+       isAuctionPending ? 'Confirming Transaction...' : 
+       'Confirming on Blockchain...'}
+    </>
+  ) : (
+    'Create Auction'
+  )}
+</Button>
             )}
           </div>
-          {showSuccessNotification && <div className="mt-4 p-3 rounded bg-green-100 text-green-800 text-center font-medium">{successNotificationMessage}</div>}
+          {showSuccessNotification && (
+            <div className="mt-4 p-3 rounded bg-green-100 text-green-800 text-center font-medium">
+              {successNotificationMessage}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -820,9 +1301,19 @@ export default function ProfilePage() {
             </div>
           <TabsContent value="owned">
             {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => (
-                  <Card key={i} className="overflow-hidden"><Skeleton className="h-64 w-full" /><CardContent className="p-4"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></CardContent></Card>
+              <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid-cols-1"}`}>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Card key={i} className="overflow-hidden">
+                    <Skeleton className="aspect-square w-full" />
+                    <CardContent className="p-4">
+                      <Skeleton className="h-5 w-3/4 mb-2" />
+                      <Skeleton className="h-4 w-1/2 mb-3" />
+                      <div className="flex gap-2">
+                        <Skeleton className="h-8 flex-1" />
+                        <Skeleton className="h-8 flex-1" />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : error ? (
@@ -865,41 +1356,168 @@ export default function ProfilePage() {
         </Tabs>
       </div>
       {showCollectionSelector && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden relative flex flex-col">
-            <Button variant="ghost" size="sm" onClick={() => setShowCollectionSelector(false)} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
-            {transactionStatus !== 'idle' && currentTransactionType === 'collection' && (
-              <div className={`m-4 p-3 rounded-lg border ${transactionStatus === 'success' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-                <div className={`flex items-center gap-2 ${transactionStatus === 'success' ? 'text-green-700' : 'text-blue-700'}`}>
-                  {transactionStatus === 'success' ? <CheckCircle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
-                  <span className="text-sm font-medium">{transactionStatus === 'success' ? 'Collection listed successfully!' : 'Processing collection transaction...'}</span>
-                  </div>
-                {transactionStatus === 'success' && lastTransactionHash && (
-                    <div className="mt-3 space-y-2">
-                    <div className="text-xs bg-white p-2 rounded border font-mono">{lastTransactionHash}</div>
-                    <a href={`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block">View on Explorer</a>
-                    </div>
-                  )}
-                </div>
-              )}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <CollectionSelector nfts={nfts} isLoading={isCollectionListing || isMarketPending || isMarketConfirming} onClose={() => setShowCollectionSelector(false)} onSell={handleListCollection} />
-            </div>
-          </div>
-        </div>
-      )}
+  <CollectionSelector 
+    nfts={nfts} 
+    isLoading={isCollectionListing || isMarketPending || isMarketConfirming}
+    transactionStatus={currentTransactionType === 'collection' ? transactionStatus : 'idle'}
+    lastTransactionHash={currentTransactionType === 'collection' ? lastTransactionHash : undefined}
+    onClose={() => {
+      resetTransactionStates(true) // ✅ Reset và đóng dialog
+    }} 
+    onSell={handleListCollection} 
+  />
+)}
       {showAuctionDialog && renderAuctionDialog()}
       {showAuctionCollectionSelector && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden relative flex flex-col">
-            <Button variant="ghost" size="sm" onClick={() => setShowAuctionCollectionSelector(false)} className="absolute right-4 top-4 z-20"><X className="h-4 w-4" /></Button>
-            <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <AuctionCollectionSelector nfts={nfts} isLoading={isAuctionPending || isAuctionConfirming} onClose={() => setShowAuctionCollectionSelector(false)} onCreateAuction={handleCreateCollectionAuction} />
-                </div>
-            {showSuccessNotification && <div className="absolute left-0 right-0 top-0 mx-auto mt-4 w-fit p-3 rounded bg-green-100 text-green-800 text-center font-medium">{successNotificationMessage}</div>}
-                </div>
+  <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    {/* ✅ Success Popup cho collection auction */}
+    {transactionStatus === 'success' && lastTransactionHash && currentTransactionType === 'collection' && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+        <Card className="max-w-md w-full mx-4 relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2"
+            onClick={() => {
+              // ✅ Chỉ đóng popup, không đóng main dialog
+              setTransactionStatus('idle')
+              setCurrentTransactionType(null)
+              setLastTransactionHash('')
+              setIsCreatingCollectionAuction(false)
+              delete (window as any).pendingAuctionData
+              // KHÔNG setShowAuctionCollectionSelector(false) ở đây
+            }}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+          <CardContent className="p-6 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Collection Auction Created Successfully! 🎉</h3>
+            <p className="text-muted-foreground mb-4">
+              Your collection auction has been created and is now live on the marketplace.
+            </p>
+            <div className="bg-muted p-3 rounded mb-4">
+              <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
+              <p className="text-sm font-medium break-all">{lastTransactionHash}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => {
+                  window.open(`https://testnet.explorer.sapphire.oasis.dev/tx/${lastTransactionHash}`, "_blank")
+                }}
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                View on Explorer
+              </Button>
+              <Button 
+                className="flex-1"
+                onClick={() => {
+                  // ✅ Reset để tạo auction mới, KHÔNG đóng main dialog
+                  setTransactionStatus('idle')
+                  setCurrentTransactionType(null)
+                  setLastTransactionHash('')
+                  setIsCreatingCollectionAuction(false)
+                  delete (window as any).pendingAuctionData
+                  // Form sẽ được reset trong AuctionCollectionSelector component
+                }}
+              >
+                Create Another
+              </Button>
+            </div>
+            <div className="mt-2">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                asChild
+              >
+                <Link href="/auctions">
+                  View in Auctions
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )}
+
+    {/* ✅ Main Dialog - LUÔN hiển thị, không ẩn khi success */}
+    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden relative flex flex-col">
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => {
+          // ✅ Đóng hoàn toàn main dialog
+          setTransactionStatus('idle')
+          setCurrentTransactionType(null)
+          setLastTransactionHash('')
+          setIsCreatingCollectionAuction(false)
+          setShowAuctionCollectionSelector(false)
+        }} 
+        className="absolute right-4 top-4 z-20"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+      
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
+        {/* ✅ Loading/Processing State */}
+        {(isAuctionPending || isAuctionConfirming || isCreatingCollectionAuction) && (
+          <div className="mb-6 p-4 rounded-lg border bg-blue-50 border-blue-200">
+            <div className="flex items-center gap-2 text-blue-700">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm font-medium">
+                {isCreatingCollectionAuction && !isAuctionPending
+                  ? 'Preparing collection auction...'
+                  : isAuctionPending 
+                  ? 'Creating collection auction transaction...' 
+                  : 'Confirming collection auction on blockchain...'}
+              </span>
+            </div>
+            {(isAuctionConfirming || (isCreatingCollectionAuction && isAuctionPending)) && (
+              <div className="mt-2 text-xs text-blue-600">
+                ⏳ Collection auctions may take longer to process
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ✅ Status notification khi success */}
+        {transactionStatus === 'success' && currentTransactionType === 'collection' && (
+          <div className="mb-6 p-4 rounded-lg border bg-green-50 border-green-200">
+            <div className="flex items-center gap-2 text-green-700">
+              <CheckCircle className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                Collection auction created successfully! You can create another auction or close this dialog.
+              </span>
+            </div>
+          </div>
+        )}
+
+        <AuctionCollectionSelector 
+          nfts={nfts} 
+          isLoading={isCreatingCollectionAuction || isAuctionPending || isAuctionConfirming} 
+          onClose={() => {
+            setTransactionStatus('idle')
+            setCurrentTransactionType(null)
+            setLastTransactionHash('')
+            setIsCreatingCollectionAuction(false)
+            setShowAuctionCollectionSelector(false)
+          }} 
+          onCreateAuction={handleCreateCollectionAuction} 
+        />
+      </div>
+      
+      {showSuccessNotification && (
+        <div className="absolute left-0 right-0 top-0 mx-auto mt-4 w-fit p-3 rounded bg-green-100 text-green-800 text-center font-medium">
+          {successNotificationMessage}
+        </div>
       )}
+    </div>
+  </div>
+)}
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative">

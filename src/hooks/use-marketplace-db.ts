@@ -88,7 +88,7 @@ export function useMarketplaceDB() {
   const [error, setError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<MarketplacePagination>({
     page: 1,
-    limit: 20,
+    limit: 10000,
     totalCount: 0,
     totalPages: 0,
     hasNext: false,
@@ -105,7 +105,7 @@ export function useMarketplaceDB() {
     try {
       const searchParams = new URLSearchParams({
         page: page.toString(),
-        limit: '20',
+        limit: '10000',
         ...(filters.category && { category: filters.category }),
         ...(filters.collection && { collection: filters.collection }),
         ...(filters.rarity && { rarity: filters.rarity }),

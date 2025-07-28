@@ -162,8 +162,7 @@ export default function AuctionsPage() {
         error,
         isPending,
         isConfirming,
-        isConfirmed
-    } = useSealedBidAuction()
+        isConfirmed    } = useSealedBidAuction()
 
     // ✅ Thêm lại sau dòng 120 (sau const useSealedBidAuction)
     // ✅ Convert database auctions to processed format
@@ -271,7 +270,7 @@ export default function AuctionsPage() {
         }
     }
 
-    // ✅ Fix handleFinalizeAuction để update database
+    // ✅ FIX: Đơn giản hóa handleFinalizeAuction
     const handleFinalizeAuction = async(auctionId: string) => {
         if (!address) {
             toast({
@@ -294,7 +293,7 @@ export default function AuctionsPage() {
                 description: "Transaction submitted. Please wait for confirmation...",
             })
 
-            // ✅ FIX: Wait for transaction confirmation properly with timeout
+            // ✅ FIX: Wait for transaction confirmation
             let confirmed = false
             const maxAttempts = 30 // 60 seconds max wait
             let attempts = 0
@@ -310,37 +309,34 @@ export default function AuctionsPage() {
             }
 
             if (confirmed) {
-                // ✅ FIX: Update database with finalization details
+                // ✅ FIX: Chỉ cần gửi auctionId và txHash
                 try {
-                    const auction = processedGroupedAuctions.ended.find(
-                        a => a.auctionId.toString() === auctionId
-                    )
+                    console.log('🔄 Updating database for auction:', auctionId)
                     
-                    if (auction) {
-                        console.log('🔄 Updating database for auction:', auctionId)
-                        
-                        const response = await fetch('/api/auctions/finalize', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                auctionId: parseInt(auctionId),
-                                txHash,
-                                winnerAddress: (auction as any).highestBidder,
-                                finalPrice: (auction as any).finalPrice?.toString()
-                            })
+                    const response = await fetch('/api/auctions/finalize', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            auctionId: parseInt(auctionId),
+                            txHash
+                            // ✅ Xóa winnerAddress và finalPrice - để API tự xử lý
                         })
-                        
-                        if (!response.ok) {
-                            const errorData = await response.text()
-                            console.error('❌ Database update failed:', errorData)
-                            throw new Error(`Database update failed: ${response.status}`)
-                        }
-                        
-                        const result = await response.json()
-                        console.log('✅ Database updated successfully:', result)
-                    } else {
-                        console.warn('⚠️ Auction not found in ended list:', auctionId)
+                    })
+                    
+                    if (!response.ok) {
+                        const errorData = await response.text()
+                        console.error('❌ Database update failed:', errorData)
+                        throw new Error(`Database update failed: ${response.status}`)
                     }
+                    
+                    const result = await response.json()
+                    console.log('✅ Database updated successfully:', result)
+
+                    toast({
+                        title: "✅ Auction Finalized",
+                        description: "The auction has been successfully finalized on the blockchain.",
+                    })
+                    refetch()
                 } catch (dbError) {
                     console.error('❌ Failed to update database:', dbError)
                     toast({
@@ -349,12 +345,6 @@ export default function AuctionsPage() {
                         variant: "destructive"
                     })
                 }
-
-                toast({
-                    title: "✅ Auction Finalized",
-                    description: "The auction has been successfully finalized on the blockchain.",
-                })
-                refetch()
             } else {
                 toast({
                     title: "⚠️ Transaction Pending",

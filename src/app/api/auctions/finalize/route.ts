@@ -3,7 +3,7 @@ import db from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
-    const { auctionId, txHash, winnerAddress, finalPrice } = await request.json()
+    const { auctionId, txHash } = await request.json()
 
     if (!auctionId) {
       return NextResponse.json({ 
@@ -12,19 +12,13 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log(` Finalizing auction ${auctionId} with:`, {
-      txHash,
-      winnerAddress,
-      finalPrice
-    })
+    console.log(` Finalizing auction ${auctionId} with txHash:`, txHash)
 
-    // Update auction state to FINALIZED
+    // ✅ FIX: Chỉ cập nhật state và txHash, không cần winnerAddress/finalPrice
     const result = await db.sql`
       UPDATE auctions 
       SET 
         state = 'FINALIZED',
-        winner_address = ${winnerAddress || null},
-        final_price = ${finalPrice || null},
         finalization_tx_hash = ${txHash || null},
         finalized_at = NOW(),
         updated_at = NOW()

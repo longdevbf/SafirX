@@ -101,15 +101,11 @@ export default function AuctionsPage() {
     const [lastBidTransactionHash, setLastBidTransactionHash] = useState<string>('')
     const [successfulBidAuctionId, setSuccessfulBidAuctionId] = useState<string | null>(null)
     
-    // ✅ Thêm states cho claim/reclaim transaction tracking
+    // ✅ Thêm states cho claim transaction tracking
     const [isClaimingNFT, setIsClaimingNFT] = useState<string | null>(null) // Track which auction is being claimed
-    const [isReclaimingNFT, setIsReclaimingNFT] = useState<string | null>(null) // Track which auction is being reclaimed
     const [claimTransactionStatus, setClaimTransactionStatus] = useState<'idle' | 'pending' | 'confirming' | 'success' | 'error'>('idle')
-    const [reclaimTransactionStatus, setReclaimTransactionStatus] = useState<'idle' | 'pending' | 'confirming' | 'success' | 'error'>('idle')
     const [lastClaimTransactionHash, setLastClaimTransactionHash] = useState<string>('')
-    const [lastReclaimTransactionHash, setLastReclaimTransactionHash] = useState<string>('')
     const [successfulClaimAuctionId, setSuccessfulClaimAuctionId] = useState<string | null>(null)
-    const [successfulReclaimAuctionId, setSuccessfulReclaimAuctionId] = useState<string | null>(null)
     
     const [activeTab,
         setActiveTab] = useState < "active" | "ended" | "finalized" > ("active")
@@ -141,15 +137,10 @@ export default function AuctionsPage() {
         txHash: string
     } | null > (null)
 
-    // ✅ Add pending claim/reclaim tracking
+    // ✅ Add pending claim tracking
     const pendingClaimRef = React.useRef<{
         auctionId: string;
         remainingAmount: string;
-        txHash: string
-    } | null>(null)
-
-    const pendingReclaimRef = React.useRef<{
-        auctionId: string;
         txHash: string
     } | null>(null)
 
@@ -166,7 +157,6 @@ export default function AuctionsPage() {
         cancelAuction,
         finalizeAuction,
         claimNFT,
-        reclaimNFT,
         useGetAuctionBids,
         hash,
         error,
@@ -236,7 +226,7 @@ export default function AuctionsPage() {
         }
     }
 
-    // ✅ Sửa handleCancelAuction để chờ confirmation
+    // ✅ Sửa handleCancelAuction để chờ confirmation, database deletion sẽ được xử lý trong useEffect
     const handleCancelAuction = async(auctionId: string, reason: string) => {
         if (!reason.trim()) {
             toast({title: "❌ Cancellation Failed", description: "Please provide a reason for cancellation.", variant: "destructive"})
@@ -253,7 +243,7 @@ export default function AuctionsPage() {
             
             toast({title: "⏳ Cancelling Auction", description: "Transaction submitted. Please wait for confirmation..."})
             
-            // ✅ Wait for transaction confirmation
+            // ✅ Wait for transaction confirmation - database deletion will be handled in useEffect
             let confirmed = false
             const maxAttempts = 30 // 60 seconds max wait
             let attempts = 0
@@ -364,8 +354,6 @@ export default function AuctionsPage() {
                     title: "✅ Auction Finalized",
                     description: "The auction has been successfully finalized on the blockchain.",
                 })
-
-                // Refresh auction data
                 refetch()
             } else {
                 toast({
@@ -431,48 +419,6 @@ export default function AuctionsPage() {
             toast({
                 title: "❌ Claim Failed",
                 description: error instanceof Error ? error.message : "Failed to claim NFT",
-                variant: "destructive"
-            })
-        }
-    }
-
-    // ✅ Thêm handleReclaimNFT với loading states
-    const handleReclaimNFT = async(auctionId: string) => {
-        if (!address) {
-            toast({
-                title: "❌ Wallet Not Connected",
-                description: "Please connect your wallet to reclaim NFT.",
-                variant: "destructive"
-            })
-            return
-        }
-
-        try {
-            // ✅ Set loading states
-            setIsReclaimingNFT(auctionId)
-            setReclaimTransactionStatus('pending')
-            
-            const txHash = await reclaimNFT(parseInt(auctionId))
-            
-            // ✅ Track pending reclaim for database update
-            pendingReclaimRef.current = {
-                auctionId,
-                txHash
-            }
-            
-            toast({
-                title: "⏳ Reclaiming NFT",
-                description: "Transaction submitted. Please wait for confirmation...",
-            })
-            
-        } catch (error) {
-            console.error('❌ Error reclaiming NFT:', error)
-            // ✅ Set error state
-            setReclaimTransactionStatus('error')
-            setIsReclaimingNFT(null)
-            toast({
-                title: "❌ Reclaim Failed",
-                description: error instanceof Error ? error.message : "Failed to reclaim NFT",
                 variant: "destructive"
             })
         }
@@ -566,67 +512,6 @@ export default function AuctionsPage() {
                                     setClaimTransactionStatus('idle')
                                     setLastClaimTransactionHash('')
                                     setSuccessfulClaimAuctionId(null)
-                                }}
-                            >
-                                Close
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        )
-    }
-
-    // ✅ Render success popup cho reclaim NFT
-    const renderReclaimSuccessPopup = (auctionId: string) => {
-        const isCurrentAuctionSuccess = successfulReclaimAuctionId === auctionId && reclaimTransactionStatus === 'success'
-        
-        if (!isCurrentAuctionSuccess || !lastReclaimTransactionHash) return null
-
-        return (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                <Card className="max-w-md w-full mx-4 relative">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2"
-                        onClick={() => {
-                            setReclaimTransactionStatus('idle')
-                            setLastReclaimTransactionHash('')
-                            setSuccessfulReclaimAuctionId(null)
-                        }}
-                    >
-                        <X className="w-4 h-4" />
-                    </Button>
-                    <CardContent className="p-6 text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-                            <CheckCircle className="w-8 h-8 text-blue-600" />
-                        </div>
-                        <h3 className="text-lg font-semibold mb-2">NFT Reclaimed Successfully! 🎉</h3>
-                        <p className="text-muted-foreground mb-4">
-                            Your NFT has been successfully reclaimed and returned to your wallet.
-                        </p>
-                        <div className="bg-muted p-3 rounded mb-4">
-                            <p className="text-xs text-muted-foreground mb-1">Transaction Hash:</p>
-                            <p className="text-sm font-medium break-all">{lastReclaimTransactionHash}</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button 
-                                variant="outline" 
-                                className="flex-1"
-                                onClick={() => {
-                                    window.open(`https://testnet.explorer.sapphire.oasis.dev/tx/${lastReclaimTransactionHash}`, "_blank")
-                                }}
-                            >
-                                <ExternalLink className="w-4 h-4 mr-2" />
-                                View on Explorer
-                            </Button>
-                            <Button 
-                                className="flex-1"
-                                onClick={() => {
-                                    setReclaimTransactionStatus('idle')
-                                    setLastReclaimTransactionHash('')
-                                    setSuccessfulReclaimAuctionId(null)
                                 }}
                             >
                                 Close
@@ -1223,13 +1108,12 @@ const renderBidDialog = (auction: ProcessedAuction) => {
         
         // ✅ Check loading states
         const isCurrentAuctionClaiming = isClaimingNFT === auction.auctionId.toString()
-        const isCurrentAuctionReclaiming = isReclaimingNFT === auction.auctionId.toString()
+        const isCurrentAuctionClaimSuccess = successfulClaimAuctionId === auction.auctionId.toString() && claimTransactionStatus === 'success'
 
         return (
             <>
                 {/* ✅ Success Popups */}
                 {renderClaimSuccessPopup(auction.auctionId.toString())}
-                {renderReclaimSuccessPopup(auction.auctionId.toString())}
 
                 <Card
                     key={auction.auctionId.toString()}
@@ -1467,6 +1351,45 @@ const renderBidDialog = (auction: ProcessedAuction) => {
 
                         {type === 'finalized' && (
                             <div className="space-y-2">
+                                {/* ✅ Claim NFT Button cho winner */}
+                                {isWinner && (
+                                    <Button
+                                        variant={isCurrentAuctionClaimSuccess ? "outline" : "default"}
+                                        className={`w-full ${isCurrentAuctionClaimSuccess ? 'border-green-500 text-green-700 bg-green-50' : ''}`}
+                                        onClick={() => {
+                                            if (isCurrentAuctionClaimSuccess) {
+                                                // ✅ Nếu đã thành công, hiển thị thông báo
+                                                toast({
+                                                    title: "✅ NFT Already Claimed",
+                                                    description: "You have successfully claimed this NFT!",
+                                                })
+                                                return
+                                            }
+                                            const remainingAmount = formatEther(auction.highestBid - auction.startingPrice)
+                                            handleClaimNFT(auction.auctionId.toString(), remainingAmount)
+                                        }}
+                                        disabled={isPending || isConfirming || isCurrentAuctionClaiming}>
+                                        {isCurrentAuctionClaimSuccess ? (
+                                            <>
+                                                <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                                NFT Claimed Successfully
+                                            </>
+                                        ) : isCurrentAuctionClaiming || isPending || isConfirming ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                                {claimTransactionStatus === 'pending' ? "Confirm in Wallet..." : 
+                                                 claimTransactionStatus === 'confirming' ? "Processing..." :
+                                                 "Claiming..."}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Crown className="w-4 h-4 mr-2" />
+                                                Claim Your NFT
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
+
                                 <BidHistoryDialog
                                     auction={auction}
                                     isOpen={showBidHistory === auction.auctionId.toString()}
@@ -1480,33 +1403,7 @@ const renderBidDialog = (auction: ProcessedAuction) => {
                                     userAddress={address}
                                 />
                                 
-                                {/* ✅ Thêm Reclaim NFT button cho seller với loading states */}
-                                {isSeller && !isWinner && (
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => handleReclaimNFT(auction.auctionId.toString())}
-                                        disabled={isCurrentAuctionReclaiming || isPending || isConfirming}
-                                        className="w-full">
-                                        {isCurrentAuctionReclaiming || (isPending && isReclaimingNFT === auction.auctionId.toString()) || (isConfirming && isReclaimingNFT === auction.auctionId.toString()) ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 animate-spin mr-2"/>
-                                                {reclaimTransactionStatus === 'pending' ? "Confirm in Wallet..." : 
-                                                 reclaimTransactionStatus === 'confirming' ? "Processing..." :
-                                                 "Reclaiming..."}
-                                            </>
-                                        ) : (
-                                            <>
-                                                <X className="w-4 h-4 mr-2"/>
-                                                Reclaim NFT
-                                            </>
-                                        )}
-                                    </Button>
-                                )}
-                                
-                                {/* ✅ Xóa các button không tồn tại:
-                                - handleRevealBid
-                                - handleEnablePublicHistory
-                                */}
+                                {/* ✅ Xóa các button không tồn tại */}
                             </div>
                         )}
                     </div>
@@ -1516,7 +1413,7 @@ const renderBidDialog = (auction: ProcessedAuction) => {
         )
     }
 
-    // ✅ Update useEffect để handle claim/reclaim transaction states
+    // ✅ Update useEffect để handle claim transaction states
     useEffect(() => {
         if (isPending && isBiddingOnAuction) {
             setBidTransactionStatus('pending')
@@ -1529,13 +1426,7 @@ const renderBidDialog = (auction: ProcessedAuction) => {
         } else if (isConfirming && isClaimingNFT) {
             setClaimTransactionStatus('confirming')
         }
-
-        if (isPending && isReclaimingNFT) {
-            setReclaimTransactionStatus('pending')
-        } else if (isConfirming && isReclaimingNFT) {
-            setReclaimTransactionStatus('confirming')
-        }
-    }, [isPending, isConfirming, isBiddingOnAuction, isClaimingNFT, isReclaimingNFT])
+    }, [isPending, isConfirming, isBiddingOnAuction, isClaimingNFT])
     // ✅ Thêm useEffect để xử lý cancel confirmation
     useEffect(() => {
         if (isConfirmed && hash && !processedConfirmTx.current.has(hash)) {
@@ -1614,7 +1505,76 @@ const renderBidDialog = (auction: ProcessedAuction) => {
 
                 updateBidInDatabase()
                 pendingBidRef.current = null
-            } else {
+            } 
+            // ✅ Check if this is a cancel transaction
+            else if (pendingCancelRef.current && pendingCancelRef.current.txHash === hash) {
+                const { auctionId, txHash } = pendingCancelRef.current
+                
+                // ✅ Call API to delete auction from database
+                const deleteAuctionFromDatabase = async () => {
+                    try {
+                        console.log('🔄 Deleting auction from database after blockchain confirmation:', auctionId)
+                        
+                        const response = await fetch('/api/auctions/cancel', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                auctionId: parseInt(auctionId),
+                                txHash,
+                                reason: cancelReason.trim(),
+                                sellerAddress: address
+                            })
+                        })
+                        
+                        if (!response.ok) {
+                            const errorData = await response.text()
+                            console.error('❌ Database deletion failed:', errorData)
+                            throw new Error(`Database deletion failed: ${response.status}`)
+                        }
+                        
+                        const result = await response.json()
+                        console.log('✅ Auction deleted from database:', result)
+                        
+                        toast({
+                            title: "✅ Auction Cancelled",
+                            description: (
+                                <div className="space-y-2">
+                                    <p>The auction has been successfully cancelled and removed from the marketplace.</p>
+                                    <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                                        Tx: {txHash.slice(0, 10)}...{txHash.slice(-6)}
+                                    </div>
+                                    <a
+                                        href={`https://testnet.explorer.sapphire.oasis.dev/tx/${txHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 hover:underline text-xs block"
+                                    >
+                                        View on Explorer →
+                                    </a>
+                                </div>
+                            ),
+                            duration: 15000
+                        })
+                        
+                        // Close the dialog and refresh
+                        setShowCancelDialog(null)
+                        setCancelReason("")
+                        refetch()
+                        
+                    } catch (dbError) {
+                        console.error('❌ Failed to delete from database:', dbError)
+                        toast({
+                            title: "⚠️ Database Update Failed",
+                            description: "Auction cancelled on blockchain but failed to remove from database. Please refresh the page.",
+                            variant: "destructive"
+                        })
+                    }
+                }
+
+                deleteAuctionFromDatabase()
+                pendingCancelRef.current = null
+            }
+            else {
                 // ✅ Handle other successful transactions
                 toast({
                     title: "✅ Transaction Successful", 
@@ -1642,7 +1602,7 @@ const renderBidDialog = (auction: ProcessedAuction) => {
                 setCancelReason("")
             }
         }
-    }, [isConfirmed, hash, refetch, address])
+    }, [isConfirmed, hash, refetch, address, cancelReason])
 
     // ✅ Thêm useEffect để xử lý successful transactions
     useEffect(() => {
@@ -1774,58 +1734,6 @@ const renderBidDialog = (auction: ProcessedAuction) => {
 
                 updateClaimInDatabase()
                 pendingClaimRef.current = null
-            }
-            // ✅ Check if this is a reclaim transaction
-            else if (pendingReclaimRef.current && pendingReclaimRef.current.txHash === hash) {
-                const { auctionId, txHash } = pendingReclaimRef.current
-                
-                // ✅ Set success states
-                setReclaimTransactionStatus('success')
-                setLastReclaimTransactionHash(txHash)
-                setSuccessfulReclaimAuctionId(auctionId)
-                setIsReclaimingNFT(null)
-                
-                // ✅ Update database with reclaim information
-                const updateReclaimInDatabase = async () => {
-                    try {
-                        console.log('🔄 Updating reclaim in database:', { auctionId, txHash })
-                        
-                        const response = await fetch('/api/auctions/reclaim', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                auctionId,
-                                reclaimerAddress: address,
-                                txHash
-                            })
-                        })
-
-                        if (!response.ok) {
-                            const errorText = await response.text()
-                            console.error('❌ Reclaim update failed:', errorText)
-                            throw new Error(`Failed to update reclaim: ${response.status}`)
-                        }
-
-                        const result = await response.json()
-                        console.log('✅ Reclaim updated in database:', result)
-                        
-                        // Refresh auction data
-                        refetch()
-                        
-                    } catch (error) {
-                        console.error('❌ Failed to update reclaim in database:', error)
-                        toast({
-                            title: "⚠️ Database Update Failed",
-                            description: "NFT reclaimed on blockchain but database update failed.",
-                            variant: "destructive"
-                        })
-                    }
-                }
-
-                updateReclaimInDatabase()
-                pendingReclaimRef.current = null
             } else {
                 // ✅ Handle other successful transactions
                 toast({
@@ -1859,17 +1767,13 @@ const renderBidDialog = (auction: ProcessedAuction) => {
         }
     }, [isConfirmed, hash, refetch, address])
 
-    // ✅ Thêm useEffect để xử lý errors cho claim/reclaim
+    // ✅ Thêm useEffect để xử lý errors cho claim
     useEffect(() => {
         if (error) {
             // ✅ Reset loading states on error
             if (isClaimingNFT) {
                 setClaimTransactionStatus('error')
                 setIsClaimingNFT(null)
-            }
-            if (isReclaimingNFT) {
-                setReclaimTransactionStatus('error')
-                setIsReclaimingNFT(null)
             }
             
             toast({
@@ -1878,7 +1782,7 @@ const renderBidDialog = (auction: ProcessedAuction) => {
                 variant: "destructive"
             })
         }
-    }, [error, isClaimingNFT, isReclaimingNFT])
+    }, [error, isClaimingNFT])
 
     // ✅ Thêm useEffect để xử lý errors
     useEffect(() => {

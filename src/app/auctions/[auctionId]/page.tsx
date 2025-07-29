@@ -40,7 +40,8 @@ import {
     AlertCircle,
     ArrowLeft,
     Share2,
-    Copy
+    Copy,
+    ExternalLink
 } from "lucide-react"
 import Image from "next/image"
 import { formatEther, parseEther } from "viem"
@@ -51,6 +52,7 @@ import { BidHistoryDialog } from "@/components/BidHistoryDialog"
 import CountdownTimer from "@/components/CountdownTimer"
 import useSealedBidAuction from "@/hooks/use-auction"
 import { ProcessedAuction } from "@/types/auction"
+import { useClaimStatus } from "@/hooks/use-claim-status"
 import { getPublicClient } from "wagmi/actions"
 import { config } from "@/components/config/wagmiConfig"
 import { SEALED_BID_AUCTION_CONFIG } from "@/abis/AuctionSealedBid"
@@ -86,6 +88,16 @@ export default function AuctionDetailPage() {
         isConfirming,
         isConfirmed
     } = useSealedBidAuction()
+
+    // ✅ Add claim status hook
+    const { 
+        updateClaimStatus,
+        isNftClaimed,
+        isNftReclaimed,
+        claimTxHash,
+        reclaimTxHash,
+        loading: claimLoading
+    } = useClaimStatus(auctionId)
 
     // ✅ Load auction data
     useEffect(() => {
@@ -156,32 +168,26 @@ export default function AuctionDetailPage() {
         }
     }, [auctionId, dbLoading, groupedAuctions, router])
 
-    // ✅ Check if user is winner
+    // ✅ Check if user is winner - use blockchain winner directly
     const checkWinnerFromContract = async () => {
         if (!auction?.isFinalized || !address) return
         
         try {
             setIsLoadingWinner(true)
-            const publicClient = getPublicClient(config)
             
-            const bids = await publicClient.readContract({
-                address: SEALED_BID_AUCTION_CONFIG.address,
-                abi: SEALED_BID_AUCTION_CONFIG.abi,
-                functionName: 'getAuctionBids',
-                args: [BigInt(auction.auctionId)]
-            })
+            // Check if there's a real winner (not 0x000...)
+            const hasRealWinner = auction.highestBidder && 
+                auction.highestBidder !== '0x0000000000000000000000000000000000000000'
             
-            if (bids && Array.isArray(bids) && bids.length > 0) {
-                const sortedBids = bids.sort((a: any, b: any) => 
-                    Number(b.amount) - Number(a.amount)
-                )
-                
-                const highestBid = sortedBids[0]
-                const isUserWinner = highestBid.bidder.toLowerCase() === address.toLowerCase()
+            if (hasRealWinner) {
+                const isUserWinner = auction.highestBidder.toLowerCase() === address.toLowerCase()
                 setIsWinner(isUserWinner)
+            } else {
+                setIsWinner(false)
             }
         } catch (error) {
             console.error('❌ Error checking winner:', error)
+            setIsWinner(false)
         } finally {
             setIsLoadingWinner(false)
         }
@@ -278,6 +284,23 @@ export default function AuctionDetailPage() {
     }
 
     const handleClaimNFT = async(auctionId: string, remainingAmount: string) => {
+        if (!address) {
+            toast({
+                title: "❌ Wallet Not Connected",
+                description: "Please connect your wallet to claim NFT.",
+                variant: "destructive"
+            })
+            return
+        }
+
+        if (isNftClaimed) {
+            toast({
+                title: "✅ NFT Already Claimed",
+                description: `You have successfully claimed this NFT! Transaction: ${claimTxHash}`,
+            })
+            return
+        }
+
         try {
             const txHash = await claimNFT(parseInt(auctionId), remainingAmount)
             
@@ -285,21 +308,26 @@ export default function AuctionDetailPage() {
                 title: "⏳ Claiming NFT",
                 description: "Transaction submitted. Please wait for confirmation...",
             })
-            
-            let confirmed = false
-            const maxAttempts = 30
-            let attempts = 0
-            
-            while (!confirmed && attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 2000))
-                attempts++
-                if (isConfirmed) confirmed = true
-            }
 
-            if (confirmed) {
+            // Update database with claim status
+            const success = await updateClaimStatus('claim', txHash, address)
+            
+            if (success) {
                 toast({
-                    title: "✅ NFT Claimed",
-                    description: "You have successfully claimed your NFT!",
+                    title: "✅ NFT Claimed Successfully!",
+                    description: (
+                        <div className="flex flex-col gap-2">
+                            <span>Your NFT has been claimed successfully!</span>
+                            <a 
+                                href={`https://explorer.oasis.io/mainnet/sapphire/tx/${txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-blue-500 hover:text-blue-700"
+                            >
+                                View Transaction <ExternalLink className="w-3 h-3" />
+                            </a>
+                        </div>
+                    ),
                 })
                 refetch()
             }
@@ -314,7 +342,15 @@ export default function AuctionDetailPage() {
     }
 
     const handleReclaimNFT = async() => {
-        if (!auction) return
+        if (!auction || !address) return
+
+        if (isNftReclaimed) {
+            toast({
+                title: "✅ NFT Already Reclaimed",
+                description: `You have successfully reclaimed this NFT! Transaction: ${reclaimTxHash}`,
+            })
+            return
+        }
         
         try {
             const txHash = await reclaimNFT(parseInt(auction.auctionId.toString()))
@@ -323,21 +359,26 @@ export default function AuctionDetailPage() {
                 title: "⏳ Reclaiming NFT",
                 description: "Transaction submitted. Please wait for confirmation...",
             })
-            
-            let confirmed = false
-            const maxAttempts = 30
-            let attempts = 0
-            
-            while (!confirmed && attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 2000))
-                attempts++
-                if (isConfirmed) confirmed = true
-            }
 
-            if (confirmed) {
+            // Update database with reclaim status
+            const success = await updateClaimStatus('reclaim', txHash)
+            
+            if (success) {
                 toast({
-                    title: "✅ NFT Reclaimed",
-                    description: "You have successfully reclaimed your NFT!",
+                    title: "✅ NFT Reclaimed Successfully!",
+                    description: (
+                        <div className="flex flex-col gap-2">
+                            <span>Your NFT has been reclaimed successfully!</span>
+                            <a 
+                                href={`https://explorer.oasis.io/mainnet/sapphire/tx/${txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-blue-500 hover:text-blue-700"
+                            >
+                                View Transaction <ExternalLink className="w-3 h-3" />
+                            </a>
+                        </div>
+                    ),
                 })
                 refetch()
             }
@@ -690,12 +731,18 @@ export default function AuctionDetailPage() {
                                                 const remainingAmount = formatEther(auction.highestBid - auction.startingPrice)
                                                 handleClaimNFT(auction.auctionId.toString(), remainingAmount)
                                             }}
-                                            disabled={isPending || isConfirming}
-                                            className="w-full">
-                                            {isPending || isConfirming ? (
+                                            disabled={isPending || isConfirming || claimLoading || isNftClaimed}
+                                            className={`w-full ${isNftClaimed ? 'bg-green-100 border-green-500 text-green-700' : ''}`}
+                                            variant={isNftClaimed ? "outline" : "default"}>
+                                            {isPending || isConfirming || claimLoading ? (
                                                 <>
                                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                                    Claiming...
+                                                    {isNftClaimed ? 'Claimed' : 'Claiming...'}
+                                                </>
+                                            ) : isNftClaimed ? (
+                                                <>
+                                                    <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                                    NFT Claimed
                                                 </>
                                             ) : (
                                                 <>
@@ -708,14 +755,19 @@ export default function AuctionDetailPage() {
                                     
                                     {isUserSeller(auction) && !isWinner && (
                                         <Button
-                                            variant="outline"
+                                            variant={isNftReclaimed ? "outline" : "outline"}
                                             onClick={handleReclaimNFT}
-                                            disabled={isPending || isConfirming}
-                                            className="w-full">
-                                            {isPending || isConfirming ? (
+                                            disabled={isPending || isConfirming || claimLoading || isNftReclaimed}
+                                            className={`w-full ${isNftReclaimed ? 'bg-green-100 border-green-500 text-green-700' : ''}`}>
+                                            {isPending || isConfirming || claimLoading ? (
                                                 <>
                                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                                    Reclaiming...
+                                                    {isNftReclaimed ? 'Reclaimed' : 'Reclaiming...'}
+                                                </>
+                                            ) : isNftReclaimed ? (
+                                                <>
+                                                    <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                                    NFT Reclaimed
                                                 </>
                                             ) : (
                                                 <>

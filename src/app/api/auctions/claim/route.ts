@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Pool } from 'pg'
 
+// Add CORS headers
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type')
+  return response
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS() {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }))
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
@@ -8,7 +21,10 @@ const pool = new Pool({
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔄 Claim API called')
     const body = await request.json()
+    console.log('📝 Request body:', body)
+    
     const { 
       auctionId, 
       type, // 'claim' or 'reclaim'
@@ -17,6 +33,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!auctionId || !type || !txHash) {
+      console.log('❌ Missing required fields')
       return NextResponse.json(
         { success: false, error: 'Missing required fields: auctionId, type, txHash' },
         { status: 400 }
@@ -30,16 +47,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log('🔌 Connecting to database...')
     const client = await pool.connect()
 
     try {
       // First, verify the auction exists and is finalized
+      console.log('🔍 Checking auction:', auctionId)
       const auctionQuery = `
         SELECT auction_id, state, winner_address, nft_claimed, nft_reclaimed
         FROM auctions 
         WHERE auction_id = $1
       `
       const auctionResult = await client.query(auctionQuery, [auctionId])
+      console.log('📊 Auction query result:', auctionResult.rows)
 
       if (auctionResult.rows.length === 0) {
         return NextResponse.json(
@@ -86,11 +106,11 @@ export async function POST(request: NextRequest) {
         
         const result = await client.query(updateQuery, [txHash, auctionId])
         
-        return NextResponse.json({
+        return addCorsHeaders(NextResponse.json({
           success: true,
           message: 'NFT claim status updated successfully',
           data: result.rows[0]
-        })
+        }))
       }
 
       // Handle reclaim operation
@@ -115,11 +135,11 @@ export async function POST(request: NextRequest) {
         
         const result = await client.query(updateQuery, [txHash, auctionId])
         
-        return NextResponse.json({
+        return addCorsHeaders(NextResponse.json({
           success: true,
           message: 'NFT reclaim status updated successfully',
           data: result.rows[0]
-        })
+        }))
       }
 
     } finally {
@@ -128,6 +148,22 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Error updating claim status:', error)
+    
+    // Check if it's a database connection error
+    if (error instanceof Error) {
+      if (error.message.includes('column') && error.message.includes('does not exist')) {
+        return NextResponse.json(
+          { success: false, error: 'Database schema not updated. Please run migrations.' },
+          { status: 500 }
+        )
+      }
+      
+      return NextResponse.json(
+        { success: false, error: `Database error: ${error.message}` },
+        { status: 500 }
+      )
+    }
+    
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -173,10 +209,10 @@ export async function GET(request: NextRequest) {
         )
       }
 
-      return NextResponse.json({
+      return addCorsHeaders(NextResponse.json({
         success: true,
         data: result.rows[0]
-      })
+      }))
 
     } finally {
       client.release()

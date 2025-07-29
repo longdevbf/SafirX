@@ -29,7 +29,9 @@ export function useClaimStatus(auctionId: string | number) {
       if (data.success) {
         setClaimStatus(data.data)
       } else {
-        setError(data.error || 'Failed to fetch claim status')
+        const errorMsg = data.error || 'Failed to fetch claim status'
+        console.error('❌ API Error:', errorMsg)
+        setError(errorMsg)
       }
     } catch (err) {
       console.error('Error fetching claim status:', err)
@@ -89,7 +91,9 @@ export function useClaimStatus(auctionId: string | number) {
         })
         return true
       } else {
-        setError(data.error || 'Failed to update claim status')
+        const errorMsg = data.error || 'Failed to update claim status'
+        console.error('❌ Update Claim Status Error:', errorMsg, 'Response:', data)
+        setError(errorMsg)
         return false
       }
     } catch (err) {

@@ -22,6 +22,7 @@ import { toast } from "@/hooks/use-toast"
 import { useClaimStatus } from "@/hooks/use-claim-status"
 import { useWallet } from "@/context/walletContext"
 import useSealedBidAuction from "@/hooks/use-auction"
+import { DebugClaimStatus } from "./DebugClaimStatus"
 
 interface PublicBid {
   bidder: string
@@ -529,6 +530,9 @@ export function BidHistoryDialog({
             isUserWinner={isUserWinner}
             publicBids={publicBids}
           />
+
+          {/* 🐛 Debug component - remove in production */}
+          <DebugClaimStatus auction={auction} />
         </div>
       </DialogContent>
     </Dialog>
@@ -559,6 +563,15 @@ function ClaimNFTSection({ auction, isUserWinner, publicBids }: ClaimNFTSectionP
       toast({
         title: "❌ Wallet Not Connected",
         description: "Please connect your wallet to claim NFT.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!auction.isFinalized) {
+      toast({
+        title: "❌ Auction Not Finalized",
+        description: "This auction must be finalized before you can claim the NFT.",
         variant: "destructive"
       });
       return;

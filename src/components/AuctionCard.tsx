@@ -41,8 +41,12 @@ export function AuctionCard({ auction, type, onClaimNFT }: AuctionCardProps) {
 
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Check if user is winner
+    // Check if user is winner - only if there's a real winner (not 0x000...)
+    const hasRealWinner = auction.highestBidder && 
+        auction.highestBidder !== '0x0000000000000000000000000000000000000000';
+    
     const isWinner = auction.isFinalized && 
+        hasRealWinner &&
         auction.highestBidder?.toLowerCase() === address?.toLowerCase();
 
     // Check if user is seller

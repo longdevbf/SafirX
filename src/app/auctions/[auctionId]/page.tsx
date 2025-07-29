@@ -168,32 +168,26 @@ export default function AuctionDetailPage() {
         }
     }, [auctionId, dbLoading, groupedAuctions, router])
 
-    // ✅ Check if user is winner
+    // ✅ Check if user is winner - use blockchain winner directly
     const checkWinnerFromContract = async () => {
         if (!auction?.isFinalized || !address) return
         
         try {
             setIsLoadingWinner(true)
-            const publicClient = getPublicClient(config)
             
-            const bids = await publicClient.readContract({
-                address: SEALED_BID_AUCTION_CONFIG.address,
-                abi: SEALED_BID_AUCTION_CONFIG.abi,
-                functionName: 'getAuctionBids',
-                args: [BigInt(auction.auctionId)]
-            })
+            // Check if there's a real winner (not 0x000...)
+            const hasRealWinner = auction.highestBidder && 
+                auction.highestBidder !== '0x0000000000000000000000000000000000000000'
             
-            if (bids && Array.isArray(bids) && bids.length > 0) {
-                const sortedBids = bids.sort((a: any, b: any) => 
-                    Number(b.amount) - Number(a.amount)
-                )
-                
-                const highestBid = sortedBids[0]
-                const isUserWinner = highestBid.bidder.toLowerCase() === address.toLowerCase()
+            if (hasRealWinner) {
+                const isUserWinner = auction.highestBidder.toLowerCase() === address.toLowerCase()
                 setIsWinner(isUserWinner)
+            } else {
+                setIsWinner(false)
             }
         } catch (error) {
             console.error('❌ Error checking winner:', error)
+            setIsWinner(false)
         } finally {
             setIsLoadingWinner(false)
         }

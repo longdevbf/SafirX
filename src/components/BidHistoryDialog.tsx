@@ -163,18 +163,19 @@ export function BidHistoryDialog({
     }
   }
   
-  // ✅ Thêm function để check winner từ bid history
+  // ✅ Check winner từ blockchain data (auction.highestBidder)
   const checkIfUserIsWinner = useCallback(() => {
-    if (!publicBids || publicBids.length === 0 || !userAddress) return false
+    if (!userAddress || !auction.isFinalized) return false
     
-    // Sắp xếp theo amount cao nhất
-    const sortedBids = [...publicBids].sort((a, b) => 
-      Number(b.amount) - Number(a.amount)
-    )
+    // Kiểm tra xem có winner thực tế không (không phải 0x000...)
+    const hasRealWinner = auction.highestBidder && 
+      auction.highestBidder !== '0x0000000000000000000000000000000000000000'
     
-    const highestBid = sortedBids[0]
-    return highestBid.bidder.toLowerCase() === userAddress.toLowerCase()
-  }, [publicBids, userAddress])
+    if (!hasRealWinner) return false
+    
+    // So sánh với blockchain winner
+    return auction.highestBidder.toLowerCase() === userAddress.toLowerCase()
+  }, [auction.highestBidder, auction.isFinalized, userAddress])
 
   const isUserWinner = checkIfUserIsWinner()
 

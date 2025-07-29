@@ -17,8 +17,11 @@ import { useEffect, useCallback, useState } from "react"
 import { usePublicClient } from "wagmi"
 import { SEALED_BID_AUCTION_CONFIG } from "@/abis/AuctionSealedBid"
 
-import { History, Crown, Eye, Loader2, Lock, AlertCircle } from "lucide-react"
+import { History, Crown, Eye, Loader2, Lock, AlertCircle, CheckCircle, ExternalLink } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { useClaimStatus } from "@/hooks/use-claim-status"
+import { useWallet } from "@/context/walletContext"
+import useSealedBidAuction from "@/hooks/use-auction"
 
 interface PublicBid {
   bidder: string
@@ -520,55 +523,169 @@ export function BidHistoryDialog({
             </div>
           )}
 
-          {/* ✅ Thêm Claim NFT button cho winner */}
-          {auction.isFinalized && isUserWinner && onClaimNFT && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Crown className="w-5 h-5 text-green-600" />
-                  <span className="font-medium text-green-900">🎉 You Won This Auction!</span>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <p className="text-sm text-green-700">
-                  Congratulations! You are the highest bidder. You can now claim your NFT.
-                </p>
-                
-                <Button
-                  onClick={() => {
-                    // Tính remaining amount từ highest bid
-                    const highestBid = publicBids?.sort((a, b) => 
-                      Number(b.amount) - Number(a.amount)
-                    )[0]
-                    
-                    if (highestBid) {
-                      const remainingAmount = formatEther(highestBid.amount - auction.startingPrice)
-                      onClaimNFT(auction.auctionId.toString(), remainingAmount)
-                    }
-                  }}
-                  disabled={isPending || isConfirming}
-                  className="w-full"
-                >
-                  {isPending || isConfirming ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Claiming...
-                    </>
-                  ) : (
-                    <>
-                      <Crown className="w-4 h-4 mr-2" />
-                      Claim NFT
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          )}
+          {/* ✅ Claim NFT section with database status */}
+          <ClaimNFTSection 
+            auction={auction}
+            isUserWinner={isUserWinner}
+            publicBids={publicBids}
+          />
         </div>
       </DialogContent>
     </Dialog>
   )
+}
+
+// ✅ Separate component for Claim NFT functionality
+interface ClaimNFTSectionProps {
+  auction: ProcessedAuction;
+  isUserWinner: boolean;
+  publicBids: PublicBid[] | null;
+}
+
+function ClaimNFTSection({ auction, isUserWinner, publicBids }: ClaimNFTSectionProps) {
+  const { address } = useWallet();
+  const { claimNFT } = useSealedBidAuction();
+  const { 
+    updateClaimStatus,
+    isNftClaimed,
+    claimTxHash,
+    loading: claimLoading
+  } = useClaimStatus(auction.auctionId.toString());
+
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleClaimNFT = async () => {
+    if (!address) {
+      toast({
+        title: "❌ Wallet Not Connected",
+        description: "Please connect your wallet to claim NFT.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (isNftClaimed) {
+      toast({
+        title: "✅ NFT Already Claimed",
+        description: `You have successfully claimed this NFT! Transaction: ${claimTxHash}`,
+      });
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      
+      // Calculate remaining amount from highest bid
+      const highestBid = publicBids?.sort((a, b) => 
+        Number(b.amount) - Number(a.amount)
+      )[0];
+      
+      if (!highestBid) {
+        throw new Error("No bid found");
+      }
+
+      const remainingAmount = formatEther(highestBid.amount - auction.startingPrice);
+      const txHash = await claimNFT(parseInt(auction.auctionId.toString()), remainingAmount);
+      
+      toast({
+        title: "⏳ Claiming NFT",
+        description: "Transaction submitted. Please wait for confirmation...",
+      });
+
+      // Update database with claim status
+      const success = await updateClaimStatus('claim', txHash, address);
+      
+      if (success) {
+        toast({
+          title: "✅ NFT Claimed Successfully!",
+          description: (
+            <div className="flex flex-col gap-2">
+              <span>Your NFT has been claimed successfully!</span>
+              <a 
+                href={`https://explorer.oasis.io/mainnet/sapphire/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-blue-500 hover:text-blue-700"
+              >
+                View Transaction <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          ),
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ Error claiming NFT:', error);
+      toast({
+        title: "❌ Claim Failed",
+        description: error instanceof Error ? error.message : "Failed to claim NFT",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (!auction.isFinalized || !isUserWinner) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Crown className="w-5 h-5 text-green-600" />
+          <span className="font-medium text-green-900">🎉 You Won This Auction!</span>
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <p className="text-sm text-green-700">
+          {isNftClaimed 
+            ? "You have successfully claimed your NFT!" 
+            : "Congratulations! You are the highest bidder. You can now claim your NFT."
+          }
+        </p>
+        
+        {isNftClaimed && claimTxHash && (
+          <div className="text-sm">
+            <a 
+              href={`https://explorer.oasis.io/mainnet/sapphire/tx/${claimTxHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-blue-500 hover:text-blue-700"
+            >
+              View Claim Transaction <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        )}
+        
+        <Button
+          onClick={handleClaimNFT}
+          disabled={isProcessing || claimLoading || isNftClaimed}
+          className={`w-full ${isNftClaimed ? 'bg-green-100 border-green-500 text-green-700' : ''}`}
+          variant={isNftClaimed ? "outline" : "default"}
+        >
+          {isProcessing || claimLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              {isNftClaimed ? 'Claimed' : 'Claiming...'}
+            </>
+          ) : isNftClaimed ? (
+            <>
+              <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+              NFT Claimed
+            </>
+          ) : (
+            <>
+              <Crown className="w-4 h-4 mr-2" />
+              Claim NFT
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default BidHistoryDialog;

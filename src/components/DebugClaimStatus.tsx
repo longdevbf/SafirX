@@ -31,7 +31,8 @@ export function DebugClaimStatus({ auction }: DebugClaimStatusProps) {
             <strong>Auction Info:</strong>
             <div>ID: {auction.auctionId.toString()}</div>
             <div>State: <Badge variant="outline">{auction.isFinalized ? 'FINALIZED' : 'NOT_FINALIZED'}</Badge></div>
-            <div>Winner: {auction.highestBidder || 'None'}</div>
+            <div>Winner (Blockchain): {auction.highestBidder || 'None'}</div>
+            <div>Winner (Database): {claimStatus?.winner_address || 'None'}</div>
             <div>Seller: {auction.seller}</div>
           </div>
           

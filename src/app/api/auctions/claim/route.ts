@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Pool } from 'pg'
+import { createPublicClient, http } from 'viem'
+import { sapphire } from 'viem/chains'
 
 // Add CORS headers
 function addCorsHeaders(response: NextResponse) {
@@ -18,6 +20,74 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
 })
+
+// Create blockchain client
+const publicClient = createPublicClient({
+  chain: sapphire,
+  transport: http()
+})
+
+// Auction contract ABI (only the functions we need)
+const AUCTION_ABI = [
+  {
+    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "name": "auctions",
+    "outputs": [
+      {"internalType": "address", "name": "seller", "type": "address"},
+      {"internalType": "address", "name": "nftContract", "type": "address"},
+      {"internalType": "uint256", "name": "tokenId", "type": "uint256"},
+      {"internalType": "bool", "name": "isCancelled", "type": "bool"},
+      {"internalType": "enum AuctionSealedBid.AuctionType", "name": "auctionType", "type": "uint8"},
+      {"internalType": "enum AuctionSealedBid.AuctionState", "name": "state", "type": "uint8"},
+      {"internalType": "uint256[]", "name": "tokenIds", "type": "uint256[]"},
+      {"internalType": "uint256", "name": "startingPrice", "type": "uint256"},
+      {"internalType": "uint256", "name": "reservePrice", "type": "uint256"},
+      {"internalType": "uint256", "name": "minBidIncrement", "type": "uint256"},
+      {"internalType": "uint256", "name": "startTime", "type": "uint256"},
+      {"internalType": "uint256", "name": "endTime", "type": "uint256"},
+      {"internalType": "uint256", "name": "bidExtensionTime", "type": "uint256"},
+      {"internalType": "bool", "name": "isActive", "type": "bool"},
+      {"internalType": "bool", "name": "isFinalized", "type": "bool"},
+      {"internalType": "uint256", "name": "totalBids", "type": "uint256"},
+      {"internalType": "uint256", "name": "uniqueBidders", "type": "uint256"},
+      {"internalType": "address", "name": "highestBidder", "type": "address"},
+      {"internalType": "uint256", "name": "highestBid", "type": "uint256"},
+      {"internalType": "bool", "name": "allowPublicReveal", "type": "bool"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const
+
+const AUCTION_CONTRACT_ADDRESS = process.env.SEALED_BID_AUCTION as `0x${string}`
+
+// Get auction winner from blockchain
+async function getAuctionWinnerFromBlockchain(auctionId: string): Promise<string | null> {
+  try {
+    console.log('🔗 Fetching auction winner from blockchain for auction:', auctionId)
+    
+    const auctionData = await publicClient.readContract({
+      address: AUCTION_CONTRACT_ADDRESS,
+      abi: AUCTION_ABI,
+      functionName: 'auctions',
+      args: [BigInt(auctionId)]
+    })
+
+    const winner = auctionData[17] // highestBidder is at index 17
+    const isFinalized = auctionData[14] // isFinalized is at index 14
+    
+    console.log('🎯 Blockchain auction data:', {
+      winner,
+      isFinalized,
+      auctionId
+    })
+
+    return isFinalized ? winner : null
+  } catch (error) {
+    console.error('❌ Error fetching auction from blockchain:', error)
+    return null
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -86,7 +156,22 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        if (winnerAddress && auction.winner_address?.toLowerCase() !== winnerAddress.toLowerCase()) {
+        // Get actual winner from blockchain
+        const blockchainWinner = await getAuctionWinnerFromBlockchain(auctionId.toString())
+        
+        if (!blockchainWinner || blockchainWinner === '0x0000000000000000000000000000000000000000') {
+          return NextResponse.json(
+            { success: false, error: 'This auction has no winner' },
+            { status: 400 }
+          )
+        }
+
+        if (winnerAddress && blockchainWinner.toLowerCase() !== winnerAddress.toLowerCase()) {
+          console.log('❌ Winner mismatch:', {
+            blockchainWinner: blockchainWinner.toLowerCase(),
+            providedWinner: winnerAddress.toLowerCase(),
+            databaseWinner: auction.winner_address?.toLowerCase()
+          })
           return NextResponse.json(
             { success: false, error: 'Only the winner can claim the NFT' },
             { status: 403 }
@@ -209,9 +294,17 @@ export async function GET(request: NextRequest) {
         )
       }
 
+      // Get actual winner from blockchain for accurate data
+      const blockchainWinner = await getAuctionWinnerFromBlockchain(auctionId)
+      
+      const responseData = {
+        ...result.rows[0],
+        winner_address: blockchainWinner || result.rows[0].winner_address // Use blockchain winner if available
+      }
+
       return addCorsHeaders(NextResponse.json({
         success: true,
-        data: result.rows[0]
+        data: responseData
       }))
 
     } finally {

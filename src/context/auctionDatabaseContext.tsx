@@ -37,6 +37,14 @@ export interface DatabaseAuction {
   updated_at: string
   finalized_at: string | null
   
+  // ✅ Claim/Reclaim fields
+  nft_claimed: boolean
+  nft_reclaimed: boolean
+  claim_tx_hash: string | null
+  reclaim_tx_hash: string | null
+  claimed_at: string | null
+  reclaimed_at: string | null
+  
   // Computed fields
   timeRemaining: number
   isActive: boolean
